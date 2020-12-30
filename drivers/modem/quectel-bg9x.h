@@ -24,7 +24,9 @@
 #include "modem_cmd_handler.h"
 #include "modem_iface_uart.h"
 
-#define MDM_UART_DEV_NAME		  DT_INST_BUS_LABEL(0)
+#define MY_UART DT_NODELABEL(stmod_usart)
+#define MDM_UART_DEV_NAME		  DT_LABEL(MY_UART)
+
 #define MDM_CMD_TIMEOUT			  K_SECONDS(10)
 #define MDM_CMD_CONN_TIMEOUT		  K_SECONDS(120)
 #define MDM_REGISTRATION_TIMEOUT	  K_SECONDS(180)

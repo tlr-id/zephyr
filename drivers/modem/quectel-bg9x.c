@@ -555,12 +555,6 @@ static ssize_t offload_sendto(void *obj, const void *buf, size_t len,
 		return -1;
 	}
 
-	/* UDP is not supported. */
-	if (sock->ip_proto != IPPROTO_UDP) {
-		errno = ENOTSUP;
-		return -1;
-	}
-
 	if (!sock->is_connected) {
 		errno = ENOTCONN;
 		return -1;
@@ -744,12 +738,6 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 		dst_port = ntohs(net_sin6(addr)->sin6_port);
 	} else if (addr->sa_family == AF_INET) {
 		dst_port = ntohs(net_sin(addr)->sin_port);
-	}
-
-	/* UDP is not supported. */
-	if (sock->ip_proto != IPPROTO_UDP) {
-		errno = ENOTSUP;
-		return -1;
 	}
 
 	k_sem_reset(&mdata.sem_sock_conn);
@@ -937,7 +925,7 @@ static const struct modem_cmd unsol_cmds[] = {
 
 /* Commands sent to the modem to set it up at boot time. */
 static const struct setup_cmd setup_cmds[] = {
-	SETUP_CMD_NOHANDLE("ATE0"),
+	SETUP_CMD_NOHANDLE("ATE1"),
 	SETUP_CMD_NOHANDLE("ATH"),
 	SETUP_CMD_NOHANDLE("AT+CMEE=1"),
 
@@ -1027,7 +1015,19 @@ restart_rssi:
 	/* Once the network is ready, activate PDP context. */
 	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
 			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
-			     MDM_CMD_TIMEOUT);
+			     MDM_CMD_TIMEOUT); 
+
+	/* If the PDP context is already opened ; it returns an error. 
+	In this case, close the context and reopens it. */
+	if(ret == -5){
+			ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     NULL, 0U, "AT+QIDEACT=1", &mdata.sem_response,
+			     MDM_CMD_TIMEOUT); 
+
+			ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
+			     MDM_CMD_TIMEOUT); 
+	}
 
 	/* Retry or Possibly Exit. */
 	if (ret < 0 && init_retry_count++ < MDM_INIT_RETRY_COUNT) {
