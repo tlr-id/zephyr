@@ -475,6 +475,7 @@ int net_config_init_app(const struct device *dev, const char *app_info)
 		}
 	}
 
+	printk(" --- Sortie de net_config_init\n");
 	return ret;
 }
 
@@ -485,6 +486,7 @@ static int init_app(const struct device *dev)
 
 	(void)net_config_init_app(NULL, "Initializing network");
 
+	printk(" --- Sortie de init app pour net_config\n");
 	return 0;
 }
 

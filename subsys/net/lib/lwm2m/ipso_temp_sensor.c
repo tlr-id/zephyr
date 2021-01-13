@@ -242,6 +242,7 @@ static int ipso_temp_sensor_init(const struct device *dev)
 	temp_sensor.create_cb = temp_sensor_create;
 	lwm2m_register_obj(&temp_sensor);
 
+	printk(" -- Sortie de temp sensor init\n");
 	return 0;
 }
 

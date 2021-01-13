@@ -57,6 +57,8 @@ static int modem_socket_packet_drop_first(struct modem_socket *sock)
 {
 	int i;
 
+	printk(" ### : On drop des paquets \n");
+
 	if (!sock || !sock->packet_count) {
 		return -EINVAL;
 	}
@@ -233,6 +235,8 @@ void modem_socket_put(struct modem_socket_config *cfg, int sock_fd)
 
 	k_sem_take(&cfg->sem_lock, K_FOREVER);
 
+	printk(" ### : On crée un modem_socket \n");
+
 	z_free_fd(sock->sock_fd);
 	sock->id = cfg->base_socket_num - 1;
 	sock->sock_fd = -1;
@@ -262,11 +266,14 @@ void modem_socket_put(struct modem_socket_config *cfg, int sock_fd)
 int modem_socket_poll(struct modem_socket_config *cfg,
 		      struct zsock_pollfd *fds, int nfds, int msecs)
 {
+
+	//printk(" @@@ --- --- @ : On est dans modem_socket_poll\n");
 	struct modem_socket *sock;
 	int ret, i;
 	uint8_t found_count = 0;
 
 	if (!cfg) {
+		printk(" @@@ --- --- @ : Err 1\n");
 		return -EINVAL;
 	}
 
@@ -313,6 +320,7 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 	for (i = 0; i < nfds; i++) {
 		sock = modem_socket_from_fd(cfg, fds[i].fd);
 		if (!sock) {
+			printk(" @@@ --- --- @ : Err 2\n");
 			continue;
 		}
 
@@ -320,14 +328,16 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 		 * Handle user check for ZSOCK_POLLOUT events:
 		 * we consider the socket to always be writable.
 		 */
+		//printk(" @@@ --- --- @ : Avant le if pour bouger revents : %8.8x ; valeur de events : %8.8x ; valeur de sock->packet_sizes[0] : %d",fds[i].revents ,fds[i].events, sock->packet_sizes[0]);
 		if (fds[i].events & ZSOCK_POLLOUT) {
 			fds[i].revents |= ZSOCK_POLLOUT;
 			found_count++;
-		} else if ((fds[i].events & ZSOCK_POLLIN) &&
-			   (sock->packet_sizes[0] > 0U)) {
+		} else if ((fds[i].events & ZSOCK_POLLIN) 
+			&& (sock->packet_sizes[0] > 0U)) {
 			fds[i].revents |= ZSOCK_POLLIN;
 			found_count++;
 		}
+		//printk (" -- et après : %8.8x\n",fds[i].revents);
 
 		sock->is_polled = false;
 	}
@@ -335,6 +345,7 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 	/* EBUSY, EAGAIN and ETIMEDOUT aren't true errors */
 	if (ret < 0 && ret != -EBUSY && ret != -EAGAIN && ret != -ETIMEDOUT) {
 		errno = ret;
+		printk(" @@@ --- --- @ : Err 3\n");
 		return -1;
 	}
 

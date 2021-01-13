@@ -9,7 +9,8 @@
 #define LOG_LEVEL CONFIG_LWM2M_LOG_LEVEL
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+//LOG_MODULE_REGISTER(LOG_MODULE_NAME)1
+LOG_MODULE_REGISTER(lwm2m_obj_security,1);
 
 #include <stdint.h>
 #include <init.h>
@@ -188,6 +189,7 @@ static int lwm2m_security_init(const struct device *dev)
 		LOG_ERR("Create LWM2M security instance 0 error: %d", ret);
 	}
 
+	printk(" -- Sortie de security init\n");
 	return ret;
 }
 

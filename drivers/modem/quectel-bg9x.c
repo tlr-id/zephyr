@@ -71,7 +71,7 @@ static int modem_atoi(const char *s, const int err_value,
 {
 	int   ret;
 	char  *endptr;
-
+	printk(" --- --- @@@ MODEM_ATOI : valeur = %s\n",s);
 	ret = (int)strtol(s, &endptr, 10);
 	if (!endptr || *endptr != '\0') {
 		LOG_ERR("bad %s '%s' in %s", log_strdup(s), log_strdup(desc),
@@ -401,22 +401,52 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 }
 
 /* Handler: Data receive indication. */
+/* Handler: +UUSOR[D|F]: <socket_id>[0],<length>[1] */
 MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 {
+	printk(" --- --- @@@ : On reçoit une cmd_unsol_recv \n");
 	struct modem_socket *sock;
 	int		     sock_fd;
+	
+	// perso
+	int new_total;
+	int ret;
 
+	// On envoi l'adresse de la chaine de caractère qui va devenir un integer ; en buffer mode c'est ok puisque 
+	// +QIURC = "recv",0 donc sock_fd reçoit 0 ; 
+	// En direct mode, arrive pas à reconnaître 0,26
 	sock_fd = ATOI(argv[0], 0, "sock_fd");
+
+	//
+	new_total=ATOI(argv[1],0,"length");
+
+	printk(" /// sock_fd vaut : %d ; new_total vaut : %d\n",sock_fd,new_total);
+	
 
 	/* Socket pointer from FD. */
 	sock = modem_socket_from_fd(&mdata.socket_config, sock_fd);
 	if (!sock) {
+		printk(" --- --- @@@ : dans on_cmd_unsol_recv : !sock \n");
 		return 0;
 	}
 
+	ret = modem_socket_packet_size_update(&mdata.socket_config,sock,new_total);
+	if (ret < 0) {
+		LOG_ERR("socket_id:%d left_bytes:%d err: %d", sock_fd,
+			new_total, ret);
+	}
+	printk(" ### : Taille du packet : 0_ : %d ; 1_ : %d \n\n",sock->packet_sizes[0],sock->packet_sizes[1]);
+
+	// On rajoute l'appel à offload recvfrom
+	//offload_recvfrom()
+
+	//printk(" \n \n \n DATA RECUE : habituellement rien \n %s \n \n \n",sock->data);
+
 	/* Data ready indication. */
-	LOG_INF("Data Receive Indication for socket: %d", sock_fd);
-	modem_socket_data_ready(&mdata.socket_config, sock);
+	if(new_total > 0){
+		LOG_INF("Data Receive Indication for socket: %d", sock_fd);
+		modem_socket_data_ready(&mdata.socket_config, sock);
+	}
 
 	return 0;
 }
@@ -473,6 +503,9 @@ static ssize_t send_socket_data(struct modem_socket *sock,
 	if (ret < 0) {
 		goto exit;
 	}
+
+	printk(" --- -- AT+QISEND send ; ret = %d\n",ret);
+	printk("%s\n\n",buf);
 
 	/* set command handlers */
 	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
@@ -579,6 +612,8 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 				int flags, struct sockaddr *from,
 				socklen_t *fromlen)
 {
+
+	printk(" --- --- --- @ : bg9x.c : On est dans offload_recvfrom\n");
 	struct modem_socket *sock = (struct modem_socket *)obj;
 	char   sendbuf[sizeof("AT+QIRD=##,####")] = {0};
 	int    ret;
@@ -709,12 +744,17 @@ static int offload_ioctl(void *obj, unsigned int request, va_list args)
 /* Func: offload_connect
  * Desc: This function will connect with a provided TCP.
  */
+
+// Liée à l'appel de connect dans lwm2m_engine.c
 static int offload_connect(void *obj, const struct sockaddr *addr,
 						   socklen_t addrlen)
 {
+
+	//printk(" --- --- --- @ bg9x.c : On vient de rentrer dans offload_connect\n");
 	struct modem_socket *sock     = (struct modem_socket *) obj;
 	uint16_t	    dst_port  = 0;
-	char		    *protocol = "TCP";
+	//char		    *protocol = "TCP";
+	char		    *protocol = "UDP";
 	struct modem_cmd    cmd[]     = { MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ",") };
 	char		    buf[sizeof("AT+QIOPEN=#,##,###,####.####.####.####,######")] = {0};
 	int		    ret;
@@ -743,7 +783,7 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 	k_sem_reset(&mdata.sem_sock_conn);
 
 	/* Formulate the complete string. */
-	snprintk(buf, sizeof(buf), "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d,0,0", 1, sock->sock_fd, protocol,
+	snprintk(buf, sizeof(buf), "AT+QIOPEN=%d,%d,\"%s\",\"%s\",%d,0,1", 1, sock->sock_fd, protocol,
 		 modem_context_sprint_ip_addr(addr), dst_port);
 
 	/* Send out the command. */
@@ -757,6 +797,8 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 		errno = -ret;
 		return -1;
 	}
+
+	printk(" --- -- offload_connect : QIOPEN command send and ret = : %d\n",ret);
 
 	/* set command handlers */
 	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
@@ -919,7 +961,8 @@ static const struct modem_cmd response_cmds[] = {
 };
 
 static const struct modem_cmd unsol_cmds[] = {
-	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
+	//MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
+	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  2U, ","),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
 };
 

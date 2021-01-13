@@ -11,8 +11,8 @@
  */
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(modem_cmd_handler, CONFIG_MODEM_LOG_LEVEL);
-
+//LOG_MODULE_REGISTER(modem_cmd_handler, CONFIG_MODEM_LOG_LEVEL);
+LOG_MODULE_REGISTER(modem_cmd_handler, 1);
 #include <kernel.h>
 #include <stddef.h>
 #include <net/buf.h>

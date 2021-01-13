@@ -17,6 +17,7 @@
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+//LOG_MODULE_REGISTER(lwm2m_engine,1);
 
 #include <zephyr/types.h>
 #include <stddef.h>
@@ -4365,45 +4366,65 @@ static void socket_receive_loop(void)
 	ssize_t len;
 	int i;
 
+	//printk(" --- --- --- @ On est dans socket_receive_loop\n");
+
 	while (1) {
 		/* wait for sockets */
+		//printk(" --- --- --- @ On attend les sockets : sock_nfds = %d\n",sock_nfds);
 		if (sock_nfds < 1) {
 			k_msleep(lwm2m_engine_service());
 			continue;
 		}
+
+		//printk(" --- --- --- @ On a eu : sock_nfds = %d\n",sock_nfds);
 
 		/*
 		 * FIXME: Currently we timeout and restart poll in case fds
 		 *        were modified.
 		 */
 		if (poll(sock_fds, sock_nfds, lwm2m_engine_service()) < 0) {
+			//printk(" --- --- --- @ On rentre dans le if poll");
 			LOG_ERR("Error in poll:%d", errno);
 			errno = 0;
 			k_msleep(ENGINE_UPDATE_INTERVAL_MS);
 			continue;
 		}
 
+		//printk(" --- --- --- @ Avant le for\n");
+
 		for (i = 0; i < sock_nfds; i++) {
+
+			//printk(" --- --- --- @ Dans le for avant le premier if\n");
 			if ((sock_fds[i].revents & POLLERR) ||
 			    (sock_fds[i].revents & POLLNVAL) ||
 			    (sock_fds[i].revents & POLLHUP)) {
 				LOG_ERR("Poll reported a socket error, %02x.",
 					sock_fds[i].revents);
+					printk(" --- --- --- @ Erreur ici : 1\n");
 				if (sock_ctx[i] != NULL &&
 				    sock_ctx[i]->fault_cb != NULL) {
 					sock_ctx[i]->fault_cb(EIO);
+					printk(" --- --- --- @ Erreur ici : 2\n");
 				}
 				continue;
 			}
 
+			//printk(" --- --- --- @ Dans le for ; deuxième if : erreur ");
 			if (!(sock_fds[i].revents & POLLIN) ||
 			    sock_ctx[i] == NULL) {
+
+					if(sock_ctx[i]==NULL){printk("sock_ctx\n");}
+					//if(!(sock_fds[i].revents & POLLIN)){printk("sock_fds ; POLLIN = %8.8x ; revents = %8.8x\n",POLLIN,sock_fds[i].revents);}
+				//printk(" --- --- --- @ Erreur ici : 3\n");
 				sock_fds[i].revents = 0;
 				continue;
 			}
 
+			//printk(" --- --- --- @ Sortie du deuxième for\n");
 			from_addr_len = sizeof(from_addr);
 			sock_fds[i].revents = 0;
+
+			printk(" --- --- --- @ lwm2m_engine : on appelle recvfrom\n");
 			len = recvfrom(sock_ctx[i]->sock_fd, in_buf,
 				       sizeof(in_buf) - 1, 0,
 				       &from_addr, &from_addr_len);
@@ -4516,6 +4537,7 @@ int lwm2m_socket_start(struct lwm2m_ctx *client_ctx)
 	}
 #endif /* CONFIG_LWM2M_DTLS_SUPPORT */
 
+	//printk(" --- --- --- @ : lwm2m_engine.c : avant de rentrer dans connect\n");
 	if (connect(client_ctx->sock_fd, &client_ctx->remote_addr,
 		    NET_SOCKADDR_MAX_SIZE) < 0) {
 		LOG_ERR("Cannot connect UDP (-%d)", errno);

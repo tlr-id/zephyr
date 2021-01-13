@@ -9,7 +9,8 @@
 #define LOG_LEVEL LOG_LEVEL_DBG
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+//LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+LOG_MODULE_REGISTER(1);
 
 #include <drivers/hwinfo.h>
 #include <zephyr.h>
@@ -270,7 +271,7 @@ static int lwm2m_setup(void)
 		 IS_ENABLED(CONFIG_LWM2M_DTLS_SUPPORT) ? "s:" : ":",
 		 strchr(SERVER_ADDR, ':') ? "[" : "", SERVER_ADDR,
 		 strchr(SERVER_ADDR, ':') ? "]" : "");
-
+	printk(" - LWM2M SETUP : server_url = %s\n",server_url);
 	/* Security Mode */
 	lwm2m_engine_set_u8("0/0/2",
 			    IS_ENABLED(CONFIG_LWM2M_DTLS_SUPPORT) ? 0 : 3);
@@ -370,14 +371,16 @@ static int lwm2m_setup(void)
 	lwm2m_engine_set_res_data("3340/0/5750", TIMER_NAME, sizeof(TIMER_NAME),
 				  LWM2M_RES_DATA_FLAG_RO);
 
+	printk(" - LWM2M SETUP : sortie \n\n");
 	return 0;
 }
 
 static void rd_client_event(struct lwm2m_ctx *client,
 			    enum lwm2m_rd_client_event client_event)
 {
-	switch (client_event) {
 
+	printk(" --- - rd_client_event avec client_event qui vaut : %d\n",client_event);
+	switch (client_event) {
 	case LWM2M_RD_CLIENT_EVENT_NONE:
 		/* do nothing */
 		break;
@@ -394,6 +397,7 @@ static void rd_client_event(struct lwm2m_ctx *client,
 		LOG_DBG("Bootstrap transfer complete");
 		break;
 
+	// Puis ici
 	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
 		LOG_DBG("Registration failure!");
 		break;
@@ -414,6 +418,7 @@ static void rd_client_event(struct lwm2m_ctx *client,
 		LOG_DBG("Deregister failure!");
 		break;
 
+	// On passe ici
 	case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
 		LOG_DBG("Disconnected");
 		break;

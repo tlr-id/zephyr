@@ -47,6 +47,7 @@
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+//LOG_MODULE_REGISTER(rd_client,1);
 
 #include <zephyr/types.h>
 #include <stddef.h>
@@ -129,6 +130,8 @@ static void set_sm_state(uint8_t sm_state)
 {
 	enum lwm2m_rd_client_event event = LWM2M_RD_CLIENT_EVENT_NONE;
 
+	printk(" \n \n____________\n --- --- set_sm_state entrée : sm_state vaut : %d \n",sm_state);
+
 	/* Determine if a callback to the app is needed */
 #if defined(CONFIG_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP)
 	if (sm_state == ENGINE_BOOTSTRAP_REG_DONE) {
@@ -140,21 +143,26 @@ static void set_sm_state(uint8_t sm_state)
 #endif
 	if (client.engine_state == ENGINE_UPDATE_SENT &&
 	    sm_state == ENGINE_REGISTRATION_DONE) {
+			printk(" --- --- event = REG_UPDATE_COMPLETE\n");
 		event = LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE;
 	} else if (sm_state == ENGINE_REGISTRATION_DONE) {
+		printk(" --- --- event =REGISTRATION_COMPLETE \n");
 		event = LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE;
 	} else if (sm_state == ENGINE_REGISTRATION_DONE_RX_OFF) {
+		printk(" --- --- event = QUEUE_MODE_RX_OFF \n");
 		event = LWM2M_RD_CLIENT_EVENT_QUEUE_MODE_RX_OFF;
 	} else if ((sm_state == ENGINE_INIT ||
 		    sm_state == ENGINE_DEREGISTERED) &&
 		   (client.engine_state >= ENGINE_DO_REGISTRATION &&
 		    client.engine_state <= ENGINE_DEREGISTER_SENT)) {
+		printk(" --- --- event = DISCONNECT \n");
 		event = LWM2M_RD_CLIENT_EVENT_DISCONNECT;
 	} else if (sm_state == ENGINE_NETWORK_ERROR) {
 		client.retry_delay = 1 << client.retries;
 		client.retries++;
 		if (client.retries > CONFIG_LWM2M_RD_CLIENT_MAX_RETRIES) {
 			client.retries = 0;
+			printk(" --- --- event = NETWORK_ERROR \n");
 			event = LWM2M_RD_CLIENT_EVENT_NETWORK_ERROR;
 		}
 	}
@@ -162,9 +170,13 @@ static void set_sm_state(uint8_t sm_state)
 	/* TODO: add locking? */
 	client.engine_state = sm_state;
 
+	// On passe ici 
 	if (event > LWM2M_RD_CLIENT_EVENT_NONE && client.event_cb) {
+		printk(" --- --- set_sms_state : on passe par ici\n");
 		client.event_cb(client.ctx, event);
 	}
+
+	printk(" --- --- set_sm_state sortie : event vaut : %d \n ___________ \n \n \n",event);
 }
 
 static bool sm_is_registered(void)
@@ -290,6 +302,8 @@ static int do_registration_reply_cb(const struct coap_packet *response,
 	uint8_t code;
 	int ret;
 
+	printk(" --- --- @ : We enter do_registration_reply_cb \n");
+
 	code = coap_header_get_code(response);
 	LOG_DBG("Registration callback (code:%u.%u)",
 		COAP_RESPONSE_CODE_CLASS(code),
@@ -345,7 +359,7 @@ static int do_registration_reply_cb(const struct coap_packet *response,
 static void do_registration_timeout_cb(struct lwm2m_message *msg)
 {
 	LOG_WRN("Registration Timeout");
-
+	printk(" --- --- @ : On a un timeout sur la registration\n");
 	/* Restart from scratch */
 	sm_handle_timeout_state(msg, ENGINE_INIT);
 }
@@ -355,6 +369,8 @@ static int do_update_reply_cb(const struct coap_packet *response,
 			      const struct sockaddr *from)
 {
 	uint8_t code;
+
+	printk(" --- --- @ : We enter do_update_reply_cb \n");
 
 	code = coap_header_get_code(response);
 	LOG_INF("Update callback (code:%u.%u)",
@@ -947,8 +963,12 @@ static void sm_do_network_error(void)
 
 static void lwm2m_rd_client_service(struct k_work *work)
 {
+
+	int tmp;
 	if (client.ctx) {
-		switch (get_sm_state()) {
+		tmp = get_sm_state();
+		//printk(" --- --- @@ rd_client_service : Ici, on doit ... %d \n", tmp);
+		switch (tmp) {
 		case ENGINE_IDLE:
 			break;
 
@@ -979,6 +999,7 @@ static void lwm2m_rd_client_service(struct k_work *work)
 			break;
 
 		case ENGINE_REGISTRATION_SENT:
+			//printk(" ce qui correspond à ENGINE REGISTRATION SET\n");
 			/* wait registration to be done or timeout */
 			break;
 
@@ -1021,6 +1042,7 @@ static void lwm2m_rd_client_service(struct k_work *work)
 void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
 			   uint32_t flags, lwm2m_ctx_event_cb_t event_cb)
 {
+
 	if (!IS_ENABLED(CONFIG_LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP) &&
 	    (flags & LWM2M_RD_CLIENT_FLAG_BOOTSTRAP)) {
 		LOG_ERR("Bootstrap support is disabled. Please enable "
@@ -1037,6 +1059,7 @@ void lwm2m_rd_client_start(struct lwm2m_ctx *client_ctx, const char *ep_name,
 	set_sm_state(ENGINE_INIT);
 	strncpy(client.ep_name, ep_name, CLIENT_EP_LEN - 1);
 	LOG_INF("Start LWM2M Client: %s", log_strdup(client.ep_name));
+	printk(" - lwm2m_rd_client_start : sortie \n\n");
 }
 
 void lwm2m_rd_client_stop(struct lwm2m_ctx *client_ctx,
