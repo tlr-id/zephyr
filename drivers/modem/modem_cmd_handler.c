@@ -474,10 +474,13 @@ static int _modem_cmd_send(struct modem_iface *iface,
 			   const uint8_t *buf, struct k_sem *sem,
 			   k_timeout_t timeout, bool no_tx_lock)
 {
+
+	printk(" \n \n \n *** dans _modem_cmd_send pour envoyer %s\n ",buf);
 	struct modem_cmd_handler_data *data;
 	int ret;
 
 	if (!iface || !handler || !handler->cmd_handler_data || !buf) {
+		printk(" erreur 1");
 		return -EINVAL;
 	}
 
@@ -486,6 +489,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 		sem = NULL;
 	} else if (!sem) {
 		/* cannot respect timeout without semaphore */
+		printk(" erreur 2");
 		return -EINVAL;
 	}
 
@@ -497,6 +501,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	ret = modem_cmd_handler_update_cmds(data, handler_cmds,
 					    handler_cmds_len, true);
 	if (ret < 0) {
+		printk("erreur 3");
 		goto unlock_tx_lock;
 	}
 
@@ -522,11 +527,14 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	iface->write(iface, data->eol, data->eol_len);
 
 	if (sem) {
+		printk(" *** *** Je prends le sémaphore en espérant un OK\n");
 		ret = k_sem_take(sem, timeout);
 
 		if (ret == 0) {
+			printk(" erreur 4");
 			ret = data->last_error;
 		} else if (ret == -EAGAIN) {
+			printk(" erreur 5");
 			ret = -ETIMEDOUT;
 		}
 	}
@@ -538,7 +546,7 @@ unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);
 	}
-	
+	printk("\n");
 	return ret;
 }
 

@@ -4425,6 +4425,7 @@ static void socket_receive_loop(void)
 			sock_fds[i].revents = 0;
 
 			printk(" --- --- --- @ lwm2m_engine : on appelle recvfrom\n");
+			printk(" valeur du buffer : %s & longueur : %d\n",in_buf,sizeof(in_buf));
 			len = recvfrom(sock_ctx[i]->sock_fd, in_buf,
 				       sizeof(in_buf) - 1, 0,
 				       &from_addr, &from_addr_len);

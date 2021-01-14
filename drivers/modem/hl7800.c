@@ -1459,6 +1459,8 @@ static bool on_cmd_atcmdinfo_iccid(struct net_buf **buf, uint16_t len)
 	/* make sure ICCID data is received
 	 *  waiting for: <ICCID>\r\n
 	 */
+
+	printk(" \n \n ICCID : buf = %s ; len = %d\n",buf,len);
 	wait_for_modem_data_and_newline(buf, net_buf_frags_len(*buf),
 					MDM_HL7800_ICCID_SIZE);
 
