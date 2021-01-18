@@ -7,7 +7,7 @@
 #define DT_DRV_COMPAT quectel_bg9x
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(modem_quectel_bg9x, 1);
+LOG_MODULE_REGISTER(modem_quectel_bg9x, 4);
 
 #include "quectel-bg9x.h"
 
@@ -139,8 +139,20 @@ static int on_cmd_sockread_common(int socket_fd,
 	int socket_data_length = find_len(data->rx_buf->data);
 	int bytes_to_skip;
 
-	//printk(" *** *** : --------------------- Data recup : \n %s",data->rx_buf->data);
+	printk(" *** *** : --------------------- Data recup : \n %s",data->rx_buf->data);
 	printk(" \n \n \n ---------------------------------------------------- \n");
+
+/*
+ON DOIT PARSE LA data->rx_buf->data
+len vaut 14.
+taille = 26 donc xx[yy]
+On prend tmp_buf[taille] = xx[yy] jusqu'à xx[yy+26]
+Puis après on a enfin OK qu'on peut verif pour libérer le sémaphore.
+Long.
+*/
+
+
+
 	if (!len) {
 		LOG_ERR("Invalid length, Aborting!");
 		return -EAGAIN;
@@ -351,6 +363,23 @@ MODEM_CMD_DEFINE(on_cmd_atcmdinfo_imsi)
 }
 
 /* Handler: <ICCID> */
+
+/*
+On rentre deux fois : 
+
+ *** dans _modem_cmd_send pour envoyer AT+QCCID
+  *** *** Je prends le sémaphore en espérant un OK
+
+
+ ICCID : buf = AT+QCCID ; len = 8
+
+
+ ICCID : buf = +QCCID: 89331042180235258509 ; len = 28
+ *** *** Je donne le sémaphore &mdata.sem_response a la réception d'une commande OK
+ erreur 4
+
+
+*/
 MODEM_CMD_DEFINE(on_cmd_atcmdinfo_iccid)
 {
 	size_t out_len;
@@ -404,7 +433,11 @@ MODEM_CMD_DEFINE(on_cmd_send_fail)
 MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 {
 	printk(" *** *** : On est dans la callback AT+QIRD\n");
-	return on_cmd_sockread_common(mdata.sock_fd, data, len);
+	printk("QIRD : buf = %s ; len = %d \n -------------------  \n \n \n  \n",data->rx_buf->data,len);
+
+	//return on_cmd_sockread_common(mdata.sock_fd, data, len);
+
+	return 0;
 }
 
 // PERSO
@@ -419,16 +452,25 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 	
 	tmp++;
 
+	printk("=== DANS UNSOL_QIRD avec :");
+
 	if(tmp > 5){
 		return 0;
 	}
 
-	printk(" ++++++++++++++++++++++++++++++++ Valeur de tmp : %d\n",tmp);
+
+
+			/* unset handler commands and ignore any errors */
+	(void)modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    NULL, 0U, false);
+	k_sem_give(&mdata.cmd_handler_data.sem_tx_lock);
+
+	//printk(" ++++++++++++++++++++++++++++++++ Valeur de tmp : %d\n",tmp);
 	taille_recue = ATOI(argv[0],0,"taille_recue");
 	sock_fd = ATOI(argv[1],0,"sock_fd");
 	new_total = ATOI(argv[2],0,"length");
 
-	printk(" === DANS UNSOL_QIRD avec : taille_recue = %d ; sock_fd = %d ; new_total = %d \n",taille_recue,sock_fd,new_total);
+	printk(" taille_recue = %d ; sock_fd = %d ; new_total = %d \n",taille_recue,sock_fd,new_total);
 
 	sock = modem_socket_from_fd(&mdata.socket_config, sock_fd);
 	if (!sock) {
@@ -448,6 +490,8 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 	//	LOG_INF("Data Receive Indication for socket: %d", sock_fd);
 		modem_socket_data_ready(&mdata.socket_config, sock);
 	//}
+
+
 
 	return 0;
 }
@@ -482,16 +526,27 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 		return 0;
 	}
 
+//------------------
+	/*  Après QISEND on veut QIRD.	*/
+//------------------
+
+	struct modem_cmd cmd_qird[] = { MODEM_CMD("+QIRD: ", on_cmd_unsol_qird,3U,","), };
 	// ON ENVOI AT+QIRD=0,0
-	char buf[sizeof("AT+QIRD=#,#")]={0};
-	snprintk(buf,sizeof(buf),"AT+QIRD=%d,%d",0,0);
-	ret = modem_cmd_send(&mctx.iface,&mctx.cmd_handler,NULL,0U,buf,&mdata.sem_response,K_SECONDS(1));
-	if(ret<0){
-		printk(" === ERREUR DANS AT+QIRD PERSO\n");
-	}
+	char buf_qird[sizeof("AT+QIRD=#,#")]={0};
+	snprintk(buf_qird,sizeof(buf_qird),"AT+QIRD=%d,%d",0,0);
 	
+	/* set command handlers */
+	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    cmd_qird, ARRAY_SIZE(cmd_qird),
+					    true);
+	if (ret < 0) {
+		printk(" === ERREUR DANS AT+QIRD PERSO fct 1 ; ret = %d\n",ret);
+	}
 
-
+	ret = modem_cmd_send(&mctx.iface,&mctx.cmd_handler,cmd_qird,ARRAY_SIZE(cmd_qird),buf_qird,&mdata.sem_response,MDM_CMD_TIMEOUT);
+	if(ret<0){
+		printk(" === ERREUR DANS AT+QIRD PERSO fct 2 ; ret = %d\n",ret);
+	}
 
 /* Réservé pour le retour de AT+QIRD=0,0
 	ret = modem_socket_packet_size_update(&mdata.socket_config,sock,new_total);
@@ -591,7 +646,7 @@ static ssize_t send_socket_data(struct modem_socket *sock,
 	ret = k_sem_take(&mdata.sem_response, timeout);
 	if (ret < 0) {
 		LOG_DBG("No send response");
-		goto exit;
+		//goto exit;
 	}
 
 	ret = modem_cmd_handler_get_error(&mdata.cmd_handler_data);
@@ -599,7 +654,41 @@ static ssize_t send_socket_data(struct modem_socket *sock,
 		LOG_DBG("Failed to send data");
 	}
 
+	/* unset handler commands and ignore any errors 
+	(void)modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    NULL, 0U, false);
+	k_sem_give(&mdata.cmd_handler_data.sem_tx_lock);
+
+	if (ret < 0) {
+		return ret;
+	}
+
+
+//------------------
+	//  Après QISEND on veut QIRD.	
+//------------------
+
+	//struct modem_cmd cmd_qird = MODEM_CMD("+QIRD: ", on_cmd_unsol_qird,3U,",");
+	// ON ENVOI AT+QIRD=0,0
+	char buf_qird[sizeof("AT+QIRD=#,#")]={0};
+	snprintk(buf_qird,sizeof(buf_qird),"AT+QIRD=%d,%d",0,0);
+	
+	/* set command handlers 
+	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    handler_cmds, handler_cmds_len,
+					    true);
+	if (ret < 0) {
+		goto exit;
+	}
+
+	ret = modem_cmd_send_nolock(&mctx.iface,&mctx.cmd_handler,NULL,0U,buf_qird,NULL,K_NO_WAIT);
+	if(ret<0){
+		printk(" === ERREUR DANS AT+QIRD PERSO\n");
+	}
+*/
+
 exit:
+
 	/* unset handler commands and ignore any errors */
 	(void)modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
 					    NULL, 0U, false);
@@ -608,6 +697,7 @@ exit:
 	if (ret < 0) {
 		return ret;
 	}
+
 
 	/* Return the amount of data written on the socket. */
 	return mdata.sock_written;
@@ -639,6 +729,9 @@ static ssize_t offload_sendto(void *obj, const void *buf, size_t len,
 		MODEM_CMD_DIRECT(">", on_cmd_tx_ready),
 		MODEM_CMD("SEND OK", on_cmd_send_ok,   0, ","),
 		MODEM_CMD("SEND FAIL", on_cmd_send_fail, 0, ","),
+		
+		// Perso
+		//MODEM_CMD("+QIRD: ", on_cmd_unsol_qird,3U,","),
 	};
 
 	/* Ensure that valid parameters are passed. */
@@ -998,12 +1091,13 @@ static void modem_rssi_query_work(struct k_work *work)
 		LOG_ERR("AT+CSQ ret:%d", ret);
 	}
 
-	/* Re-start RSSI query work */
+	/* Re-start RSSI query work 
 	if (work) {
 		k_delayed_work_submit_to_queue(&modem_workq,
 					       &mdata.rssi_query_work,
 					       K_SECONDS(RSSI_TIMEOUT_SECS));
 	}
+	*/
 }
 
 /* Func: pin_init
@@ -1040,14 +1134,11 @@ static const struct modem_cmd unsol_cmds[] = {
 	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
 	//MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  2U, ","),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
-	
-	//Perso
-	MODEM_CMD("+QIRD: ", 		on_cmd_unsol_qird,3U,","),
 };
 
 /* Commands sent to the modem to set it up at boot time. */
 static const struct setup_cmd setup_cmds[] = {
-	SETUP_CMD_NOHANDLE("ATE0"),
+	SETUP_CMD_NOHANDLE("ATE1"),
 	SETUP_CMD_NOHANDLE("ATH"),
 	SETUP_CMD_NOHANDLE("AT+CMEE=1"),
 

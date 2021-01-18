@@ -527,15 +527,20 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	iface->write(iface, data->eol, data->eol_len);
 
 	if (sem) {
-		printk(" *** *** Je prends le sémaphore en espérant un OK\n");
+		printk(" *** *** Je prends le sémaphore en espérant un OK ; un timeout qui vaut : %d\n",timeout);
 		ret = k_sem_take(sem, timeout);
 
 		if (ret == 0) {
 			printk(" erreur 4");
 			ret = data->last_error;
 		} else if (ret == -EAGAIN) {
-			printk(" erreur 5");
-			ret = -ETIMEDOUT;
+			printk(" erreur 5 : erreur de sémaphore pas libéré ?\n");
+			if(buf[6]!='R'){
+				ret = -ETIMEDOUT;
+			}
+			else{
+				ret = data->last_error;
+			}
 		}
 	}
 
@@ -547,6 +552,7 @@ unlock_tx_lock:
 		k_sem_give(&data->sem_tx_lock);
 	}
 	printk("\n");
+	printk(" *** On sort de _modem_cmd_send avec ret = %d\n",ret);
 	return ret;
 }
 
