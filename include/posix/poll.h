@@ -22,6 +22,7 @@ extern "C" {
 
 static inline int poll(struct pollfd *fds, int nfds, int timeout)
 {
+	printk(" *** On est dans la fonction poll() qui redirige vers zsock_poll\n");
 	return zsock_poll(fds, nfds, timeout);
 }
 

@@ -4364,6 +4364,7 @@ static void socket_receive_loop(void)
 	socklen_t from_addr_len;
 	ssize_t len;
 	int i;
+	int iter;
 
 	while (1) {
 		/* wait for sockets */
@@ -4376,12 +4377,29 @@ static void socket_receive_loop(void)
 		 * FIXME: Currently we timeout and restart poll in case fds
 		 *        were modified.
 		 */
+
+		printk(" -------------------------------  \n");
+		printk(" *** Avant de rentrer dans poll() \n");
+		
+		for(iter = 0; iter < MAX_POLL_FD ; iter++){
+			printk("    i : %d ; sock_nfds : %d ; sock_fds.fd : %d ; .events : %d ; .revents : %d\n",iter,sock_nfds,sock_fds[iter].fd,sock_fds[iter].events,sock_fds[iter].revents);
+		}
+
 		if (poll(sock_fds, sock_nfds, lwm2m_engine_service()) < 0) {
+		//if (zsock_poll(sock_fds, sock_nfds,10000) <0){
+		
 			LOG_ERR("Error in poll:%d", errno);
+			printk("Erreur in poll\n");
 			errno = 0;
 			k_msleep(ENGINE_UPDATE_INTERVAL_MS);
 			continue;
 		}
+
+		printk(" *** Après poll() \n");
+		for(iter = 0; iter < MAX_POLL_FD ; iter++){
+			printk("    i : %d ; sock_nfds : %d ; sock_fds.fd : %d ; .events : %d ; .revents : %d\n",iter,sock_nfds,sock_fds[iter].fd,sock_fds[iter].events,sock_fds[iter].revents);
+		}
+		printk(" -------------------------------  \n\n\n");
 
 		for (i = 0; i < sock_nfds; i++) {
 			if ((sock_fds[i].revents & POLLERR) ||

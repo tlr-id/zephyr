@@ -262,6 +262,8 @@ void modem_socket_put(struct modem_socket_config *cfg, int sock_fd)
 int modem_socket_poll(struct modem_socket_config *cfg,
 		      struct zsock_pollfd *fds, int nfds, int msecs)
 {
+
+	printk(" --- Dans modem_socket_poll \n");
 	struct modem_socket *sock;
 	int ret, i;
 	uint8_t found_count = 0;
@@ -272,17 +274,22 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 
 	k_sem_reset(&cfg->sem_poll);
 
+
 	for (i = 0; i < nfds; i++) {
+		printk(" --- i : %d => ",i);
 		sock = modem_socket_from_fd(cfg, fds[i].fd);
 		if (sock) {
+			printk(" On a trouvé un socket\n");
 			/*
 			 * Handle user check for POLLOUT events:
 			 * we consider the socket to always be writable.
 			 */
 			if (fds[i].events & ZSOCK_POLLOUT) {
+				printk(" --- Pour ce socket fds[i].events & ZSOCK_POLLOUT est vrai\n");
 				found_count++;
 				break;
 			} else if (fds[i].events & ZSOCK_POLLIN) {
+				printk(" --- Pour ce socket fds[i].events & ZSOCK_POLLIN est vrai\n");
 				sock->is_polled = true;
 
 				/*
@@ -305,26 +312,33 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 	/* Avoid waiting on semaphore if we have already found an event */
 	ret = 0;
 	if (!found_count) {
+		printk(" --- found_count vaut 0 donc on prend le sémaphore cfg->sem_poll\n");
 		ret = k_sem_take(&cfg->sem_poll, K_MSEC(msecs));
 	}
 	/* Reset counter as we reiterate on all polled sockets */
 	found_count = 0;
 
+	printk(" --- Maintenant revents\n");
 	for (i = 0; i < nfds; i++) {
+		printk(" --- i : %d => ",i);
 		sock = modem_socket_from_fd(cfg, fds[i].fd);
 		if (!sock) {
 			continue;
 		}
-
+		printk(" On a trouvé un socket\n");
 		/*
 		 * Handle user check for ZSOCK_POLLOUT events:
 		 * we consider the socket to always be writable.
 		 */
+
+		printk(" --- fds[%d].events = %d ; sock->packet_sizes[0] = %d \n",i,fds[i].events,sock->packet_sizes[0]);
 		if (fds[i].events & ZSOCK_POLLOUT) {
+			printk(" --- fds[%d].events & ZSOCK_POLLOUT est vrai \n",i);
 			fds[i].revents |= ZSOCK_POLLOUT;
 			found_count++;
 		} else if ((fds[i].events & ZSOCK_POLLIN) &&
 			   (sock->packet_sizes[0] > 0U)) {
+			printk(" --- On passe fds[%d].revents à ZSOCK_POLLIN\n",i);
 			fds[i].revents |= ZSOCK_POLLIN;
 			found_count++;
 		}
@@ -335,10 +349,12 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 	/* EBUSY, EAGAIN and ETIMEDOUT aren't true errors */
 	if (ret < 0 && ret != -EBUSY && ret != -EAGAIN && ret != -ETIMEDOUT) {
 		errno = ret;
+		printk(" --- On retourne une erreur \n");
 		return -1;
 	}
 
 	errno = 0;
+	printk(" --- On sort de modem_socket_poll et on retourne found_count = %d\n",found_count);
 	return found_count;
 }
 
@@ -355,20 +371,24 @@ void modem_socket_wait_data(struct modem_socket_config *cfg,
 void modem_socket_data_ready(struct modem_socket_config *cfg,
 			     struct modem_socket *sock)
 {
+	printk(" +++ On rentre dans modem_socket_data_ready \n");
 	k_sem_take(&cfg->sem_lock, K_FOREVER);
 
 	if (sock->is_waiting) {
+		printk(" +++ On débloque &sock->sem_data_ready \n");
 		/* unblock sockets waiting on recv() */
 		sock->is_waiting = false;
 		k_sem_give(&sock->sem_data_ready);
 	}
 
 	if (sock->is_polled) {
+		printk(" +++ On débloque &sock->sem_poll \n");
 		/* unblock poll() */
 		k_sem_give(&cfg->sem_poll);
 	}
 
 	k_sem_give(&cfg->sem_lock);
+	printk(" +++ On sort de modem_socket_data_ready \n");
 }
 
 int modem_socket_init(struct modem_socket_config *cfg,

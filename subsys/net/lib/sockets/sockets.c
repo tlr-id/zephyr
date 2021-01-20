@@ -1254,6 +1254,8 @@ static inline int time_left(uint32_t start, uint32_t timeout)
 
 int z_impl_zsock_poll(struct zsock_pollfd *fds, int nfds, int poll_timeout)
 {
+
+	printk(" *** On est dans zsock_poll de sockets.c\n");
 	bool retry;
 	int ret = 0;
 	int i;

@@ -317,6 +317,7 @@ MODEM_CMD_DEFINE(on_cmd_atcmdinfo_revision)
 	return 0;
 }
 
+
 /* Handler: <IMEI> */
 MODEM_CMD_DEFINE(on_cmd_atcmdinfo_imei)
 {
@@ -400,18 +401,32 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 	return on_cmd_sockread_common(mdata.sock_fd, data, len);
 }
 
+int tmp = 0;
+
 /* Handler: Data receive indication. */
+/* Handler: +QIURC: "recv",<socket_id>[0],<length>[1] */
 MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 {
+
+	printk(" \n \n \n ON A RECU UN RECV \n \n");
 	struct modem_socket *sock;
-	int		     sock_fd;
+	int		     sock_fd, new_total, ret;
 
 	sock_fd = ATOI(argv[0], 0, "sock_fd");
+
+	new_total = ATOI(argv[1], 0,"length"); 
 
 	/* Socket pointer from FD. */
 	sock = modem_socket_from_fd(&mdata.socket_config, sock_fd);
 	if (!sock) {
 		return 0;
+	}
+
+	ret = modem_socket_packet_size_update(&mdata.socket_config, sock,
+					      new_total);
+	if (ret < 0) {
+		LOG_ERR("socket_id:%d left_bytes:%d err: %d", sock_fd,
+			new_total, ret);
 	}
 
 	/* Data ready indication. */
@@ -579,22 +594,57 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 				int flags, struct sockaddr *from,
 				socklen_t *fromlen)
 {
+
+	printk(" @@@ Dans offload_recvfrom ; buf : %s & len : %d\n",buf,len);
+
+
 	struct modem_socket *sock = (struct modem_socket *)obj;
 	char   sendbuf[sizeof("AT+QIRD=##,####")] = {0};
-	int    ret;
+	int    ret, next_packet_size;
 	struct socket_read_data sock_data;
 
 	/* Modem command to read the data. */
 	struct modem_cmd data_cmd[] = { MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 0U, "") };
 
 	if (!buf || len == 0) {
+		printk(" @@@ Sortie sur EINVAL de offloa_recvfrom\n");
 		errno = EINVAL;
 		return -1;
 	}
 
 	if (flags & ZSOCK_MSG_PEEK) {
+		printk(" @@@ Sortie sur ENOTSUP de offloa_recvfrom\n");
 		errno = ENOTSUP;
 		return -1;
+	}
+
+/* RAJOUT */
+	next_packet_size = modem_socket_next_packet_size(&mdata.socket_config,
+							 sock);
+	if (!next_packet_size) {
+		if (flags & ZSOCK_MSG_DONTWAIT) {
+			printk(" @@@ Sortie sur EAGAIN de offloa_recvfrom\n");
+			errno = EAGAIN;
+			return -1;
+		}
+/*
+		if (!sock->is_connected && sock->ip_proto != IPPROTO_UDP) {
+			errno = 0;
+			return 0;
+		}
+
+		modem_socket_wait_data(&mdata.socket_config, sock);
+		next_packet_size = modem_socket_next_packet_size(
+			&mdata.socket_config, sock);
+*/
+	}
+
+	/*
+	 * Binary and ASCII mode allows sending MDM_MAX_DATA_LENGTH bytes to
+	 * the socket in one command
+	 */
+	if (next_packet_size > MDM_MAX_DATA_LENGTH) {
+		next_packet_size = MDM_MAX_DATA_LENGTH;
 	}
 
 	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%d", sock->sock_fd, len);
@@ -714,7 +764,7 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 {
 	struct modem_socket *sock     = (struct modem_socket *) obj;
 	uint16_t	    dst_port  = 0;
-	char		    *protocol = "TCP";
+	char		    *protocol = "UDP";
 	struct modem_cmd    cmd[]     = { MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ",") };
 	char		    buf[sizeof("AT+QIOPEN=#,##,###,####.####.####.####,######")] = {0};
 	int		    ret;
@@ -919,7 +969,8 @@ static const struct modem_cmd response_cmds[] = {
 };
 
 static const struct modem_cmd unsol_cmds[] = {
-	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
+	//MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
+	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  2U, ","),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
 };
 
@@ -934,11 +985,18 @@ static const struct setup_cmd setup_cmds[] = {
 	SETUP_CMD("AT+CGMM", "", on_cmd_atcmdinfo_model, 0U, ""),
 	SETUP_CMD("AT+CGMR", "", on_cmd_atcmdinfo_revision, 0U, ""),
 	SETUP_CMD("AT+CGSN", "", on_cmd_atcmdinfo_imei, 0U, ""),
+
+
 #if defined(CONFIG_MODEM_SIM_NUMBERS)
 	SETUP_CMD("AT+CIMI", "", on_cmd_atcmdinfo_imsi, 0U, ""),
 	SETUP_CMD("AT+QCCID", "", on_cmd_atcmdinfo_iccid, 0U, ""),
 #endif /* #if defined(CONFIG_MODEM_SIM_NUMBERS) */
 	SETUP_CMD_NOHANDLE("AT+QICSGP=1,1,\"" MDM_APN "\",\"" MDM_USERNAME "\", \"" MDM_PASSWORD "\",1"),
+};
+
+/* Commands sent to the modem to set it up at boot time. Those commands require a certain firmware version to work. */
+static const struct setup_cmd firmware_cmds[] = {
+	SETUP_CMD_NOHANDLE("AT+QICFG=\"recvind\",1"), 
 };
 
 /* Func: modem_setup
@@ -974,6 +1032,16 @@ restart:
 					   setup_cmds, ARRAY_SIZE(setup_cmds),
 					   &mdata.sem_response, MDM_REGISTRATION_TIMEOUT);
 	if (ret < 0) {
+		goto error;
+	}
+
+	/* Run firmware-depended commands on the modem. */
+	ret = modem_cmd_handler_setup_cmds(&mctx.iface, &mctx.cmd_handler,
+					   firmware_cmds, ARRAY_SIZE(firmware_cmds),
+					   &mdata.sem_response, MDM_REGISTRATION_TIMEOUT);
+	if (ret < 0) {
+		LOG_ERR("Modem Application Firmware not up to date; at least 01.008.01.008 required.");
+		LOG_ERR("Consider upgrading it !");
 		goto error;
 	}
 
@@ -1038,6 +1106,13 @@ error:
 	return ret;
 }
 
+static int offload_bind(void *obj, const struct sockaddr *addr,
+			socklen_t addrlen)
+{
+	printk(" --- On est dans offload_bind \n \n \n");
+	return 0;
+}
+
 static const struct socket_op_vtable offload_socket_fd_op_vtable = {
 	.fd_vtable = {
 		.read	= offload_read,
@@ -1045,7 +1120,7 @@ static const struct socket_op_vtable offload_socket_fd_op_vtable = {
 		.close	= offload_close,
 		.ioctl	= offload_ioctl,
 	},
-	.bind		= NULL,
+	.bind		= offload_bind,
 	.connect	= offload_connect,
 	.sendto		= offload_sendto,
 	.recvfrom	= offload_recvfrom,
