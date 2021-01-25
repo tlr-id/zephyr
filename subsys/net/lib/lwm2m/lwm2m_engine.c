@@ -16,7 +16,7 @@
 #define LOG_LEVEL CONFIG_LWM2M_LOG_LEVEL
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+LOG_MODULE_REGISTER(LOG_MODULE_NAME,1);
 
 #include <zephyr/types.h>
 #include <stddef.h>
