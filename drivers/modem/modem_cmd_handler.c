@@ -478,6 +478,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	int ret;
 
 	if (!iface || !handler || !handler->cmd_handler_data || !buf) {
+		printk(" ''' ERREUR ICI 1\n");
 		return -EINVAL;
 	}
 
@@ -486,6 +487,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 		sem = NULL;
 	} else if (!sem) {
 		/* cannot respect timeout without semaphore */
+		printk(" ''' ERREUR ICI 2\n");
 		return -EINVAL;
 	}
 
@@ -497,6 +499,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	ret = modem_cmd_handler_update_cmds(data, handler_cmds,
 					    handler_cmds_len, true);
 	if (ret < 0) {
+		printk(" ''' ERREUR ICI 3\n");
 		goto unlock_tx_lock;
 	}
 
@@ -527,6 +530,8 @@ static int _modem_cmd_send(struct modem_iface *iface,
 		if (ret == 0) {
 			ret = data->last_error;
 		} else if (ret == -EAGAIN) {
+
+			printk(" ''' ERREUR ICI 4 ; on attend le sémaphore en réponse de cette commande : %s\n",buf);
 			ret = -ETIMEDOUT;
 		}
 	}

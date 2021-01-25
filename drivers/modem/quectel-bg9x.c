@@ -132,6 +132,7 @@ static int on_cmd_sockread_common(int socket_fd,
 				  struct modem_cmd_handler_data *data,
 				  uint16_t len)
 {
+	printk(" === ON EST DANS SOCKREAD_COMMON ; data : %s\n",data->rx_buf->data);
 	struct modem_socket	 *sock = NULL;
 	struct socket_read_data	 *sock_data;
 	int ret, i;
@@ -229,6 +230,7 @@ static void socket_close(struct modem_socket *sock)
 /* Handler: OK */
 MODEM_CMD_DEFINE(on_cmd_ok)
 {
+	printk("On reçoit un OK\n");
 	modem_cmd_handler_set_error(data, 0);
 	k_sem_give(&mdata.sem_response);
 	return 0;
@@ -400,11 +402,79 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 	return on_cmd_sockread_common(mdata.sock_fd, data, len);
 }
 
+// Valeur ou on stocke la taille
+int total_receive_value;
+
+// Sémaphore pour sécuriser le truc
+struct k_sem my_sem;
+
+// Perso : récupérer AT+QIRD value
+// <total_receive>[0] , <have_read>[1] , <unread_length>[2]
+MODEM_CMD_DEFINE(on_cmd_unsol_qird)
+{
+	printk(" @@@ On est dans callback AT+QIRD\n");
+	// Rajouter de la verif ?
+	total_receive_value = ATOI(argv[0],0,"total_receive");
+	int have_read = ATOI(argv[1],0,"have_read");
+	int unread_length = ATOI(argv[2],0,"unread_length");
+
+	printk("    total_receive vaut : %d have_read : %d et unread_length : %d\n",total_receive_value,have_read,unread_length);
+	printk("    On donne le sémaphore my_sem\n");
+	k_sem_give(&my_sem);
+
+	return 0;
+}
+
+// Perso : on envoi AT+QIRD=0,0 ; rajouter le bon socket en argument de la fonction.
+static void get_length_value(){
+
+	printk(" === On est dans get_length_value \n");
+	struct modem_cmd cmd[]  = { MODEM_CMD("+QIRD: ", on_cmd_unsol_qird, 3U, ","), };
+	static char *send_cmd = "AT+QIRD=0,0";
+	int ret;
+
+	/* query modem RSSI */
+	printk("    On envoi AT+QIRD=0,0\n");
+
+	/* On change les commandes -> Déjà fait en interne dans modem_cmd_send
+	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					cmd, 1U,
+					true);
+	*/
+
+	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     cmd, ARRAY_SIZE(cmd), send_cmd, &mdata.sem_response,
+			     MDM_CMD_TIMEOUT);
+
+		/* set command handlers */
+	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    cmd, ARRAY_SIZE(cmd), true);
+	if (ret < 0) {
+		printk(" ERROR UPDATE CMD POST SEND\n");
+	}
+	
+/* ICI on a un besoin d'un lock
+	ret = modem_cmd_send_nolock(&mctx.iface, &mctx.cmd_handler,
+				    NULL, 0U, send_cmd, NULL, K_SECONDS(1));
+*/
+	if (ret < 0) {
+		printk("    On a une erreur dans l'envoi de AT+QIRD : ret vaut : %d\n",ret);
+		LOG_ERR("AT+QIRD  ret:%d", ret);
+	}
+
+};
+
 /* Handler: Data receive indication. */
 MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 {
+	printk(" --- On rentre dans unsol_recv\n");
 	struct modem_socket *sock;
 	int		     sock_fd;
+	int new_total;
+	int ret;
+
+	// On gère mon sémaphore
+	k_sem_init(&my_sem,0,1);
 
 	sock_fd = ATOI(argv[0], 0, "sock_fd");
 
@@ -414,10 +484,36 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 		return 0;
 	}
 
-	/* Data ready indication. */
-	LOG_INF("Data Receive Indication for socket: %d", sock_fd);
-	modem_socket_data_ready(&mdata.socket_config, sock);
+	// PERSO : appel à la fonction qui envoit AT+QIRD=0,0
+	get_length_value();
 
+	printk("    On prend le sémaphore my_sem\n");
+	// On prend le sémaphore libéré dans +QIRD callback
+	k_sem_take(&my_sem,K_FOREVER);
+
+	printk(" --- Le sémaphore my_sem est relaché \n");
+	new_total = total_receive_value;
+
+	/* On remet les commandes initiales //
+	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
+					    cmd,  ARRAY_SIZE(cmd),
+					    true);
+*/
+	/* Data ready indication. */
+	ret = modem_socket_packet_size_update(&mdata.socket_config, sock,
+					      new_total);
+	if (ret < 0) {
+		printk("    Erreur dans modem_socket_packet_size_update : %d\n",ret);
+		LOG_ERR("socket_id:%d left_bytes:%d err: %d", sock_fd,
+			new_total, ret);
+	}
+
+	if (new_total > 0) {
+		printk("    On prévient que de la data est ready\n");
+		modem_socket_data_ready(&mdata.socket_config, sock);
+	}
+
+	printk(" --- On sort de unsol_recv\n");
 	return 0;
 }
 
@@ -714,7 +810,7 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 {
 	struct modem_socket *sock     = (struct modem_socket *) obj;
 	uint16_t	    dst_port  = 0;
-	char		    *protocol = "TCP";
+	char		    *protocol = "UDP";
 	struct modem_cmd    cmd[]     = { MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ",") };
 	char		    buf[sizeof("AT+QIOPEN=#,##,###,####.####.####.####,######")] = {0};
 	int		    ret;
@@ -921,6 +1017,7 @@ static const struct modem_cmd response_cmds[] = {
 static const struct modem_cmd unsol_cmds[] = {
 	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
+	//MODEM_CMD("+QIRD: ", on_cmd_unsol_qird, 3U, ","),
 };
 
 /* Commands sent to the modem to set it up at boot time. */
