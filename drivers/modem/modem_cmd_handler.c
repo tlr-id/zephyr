@@ -518,7 +518,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	}
 #endif
 	if (sem) {
-		k_sem_reset(sem);
+		//k_sem_reset(sem);
 	}
 
 	iface->write(iface, buf, strlen(buf));

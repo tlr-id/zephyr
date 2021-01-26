@@ -4359,6 +4359,8 @@ void lwm2m_socket_del(struct lwm2m_ctx *ctx)
 
 static void socket_receive_loop(void)
 {
+
+	printk(" *** SOCKET_RECEIVE_LOOP \n");
 	static uint8_t in_buf[NET_IPV6_MTU];
 	static struct sockaddr from_addr;
 	socklen_t from_addr_len;
@@ -4404,6 +4406,7 @@ static void socket_receive_loop(void)
 
 			from_addr_len = sizeof(from_addr);
 			sock_fds[i].revents = 0;
+			printk(" *** APPEL A RECVFROM \n");
 			len = recvfrom(sock_ctx[i]->sock_fd, in_buf,
 				       sizeof(in_buf) - 1, 0,
 				       &from_addr, &from_addr_len);
