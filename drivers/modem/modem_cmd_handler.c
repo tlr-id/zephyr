@@ -51,89 +51,21 @@ static uint16_t findcrlf(struct modem_cmd_handler_data *data,
 	struct net_buf *buf = data->rx_buf;
 	uint16_t len = 0U, pos = 0U;
 
-	// Cas perso :[0]Q[1]I[2]R[3]D[4] [5]x[6]x[7],[8]
-	// +QIRD: 26,0,26 -> premier QIRD
-	// +QIRD: 26crlf -> deuxieme QIRD
-	if( buf->data[2] == 'I' && buf->data[4] == 'D' && buf->data[8] != ',' ) {
-		printk(" ~~~ FINDCRLF : MON CAS\n");
-
-		/*
-		Algo initial :
-		frag : passé en paramètre ; portion de buffer
-		offset : passé en param ; à remplir
-		buf : buffer actuel avec la data
-		len : longueur
-		pos : position
-
-		Tant que le caractère étudié est pas un cr ou un lf
-			Si on dépasse la taille du buffer 
-				traitement
-			Sinon pos augmente et on avance
-		
-		On a trouvé un cr ou un lf -> on sort et on rentre dans le test
-			pos vaut la position précise du cr ou lf
-
-		Dans le cas où on est sorti du while, si c'est parce qu'on a trouvé un c ou un lf
-		on met dans len la position à laquelle on sort, on gère au cas où dépassement offset et buffer
-		et on sort avec len -> On renvoit a position où l'on a le cr ou lf.
-		*/
-
-		/*
-		Dans notre cas, on veut capter un deuxième groupe de crlf et renvoyer ici.
-		Pour ce faire, on peut incrémenter position de 2 (éviter de passer par le lf juste
-		derrière) et refaire une recherche. La sortie sera similaire.
-
-		*/
-		while (buf && buf->len && !is_crlf(*(buf->data + pos))) {
-			if (pos + 1 >= buf->len) {
-				len += buf->len;
-				buf = buf->frags;
-				pos = 0U;
-			} else {
-				pos++;
-			}
+	while (buf && buf->len && !is_crlf(*(buf->data + pos))) {
+		if (pos + 1 >= buf->len) {
+			len += buf->len;
+			buf = buf->frags;
+			pos = 0U;
+		} else {
+			pos++;
 		}
-
-		pos = pos+2;
-
-		while (buf && buf->len && !is_crlf(*(buf->data + pos))) {
-			if (pos + 1 >= buf->len) {
-				len += buf->len;
-				buf = buf->frags;
-				pos = 0U;
-			} else {
-				pos++;
-			}
-		}
-
-		if (buf && buf->len && is_crlf(*(buf->data + pos))) {
-			len += pos;
-			*offset = pos;
-			*frag = buf;
-			return len;
-		}
-
 	}
-	// Initial Case
-	else{
-	printk(" ~~~ FINDCRLF : CAS CLASSIQUE \n");
 
-		while (buf && buf->len && !is_crlf(*(buf->data + pos))) {
-			if (pos + 1 >= buf->len) {
-				len += buf->len;
-				buf = buf->frags;
-				pos = 0U;
-			} else {
-				pos++;
-			}
-		}
-
-		if (buf && buf->len && is_crlf(*(buf->data + pos))) {
-			len += pos;
-			*offset = pos;
-			*frag = buf;
-			return len;
-		}
+	if (buf && buf->len && is_crlf(*(buf->data + pos))) {
+		len += pos;
+		*offset = pos;
+		*frag = buf;
+		return len;
 	}
 
 	return 0;
@@ -384,13 +316,10 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 
 	/* process all of the data in the net_buf */
 	while (data->rx_buf && data->rx_buf->len) {
-		//if(data->rx_buf->len!=0){printk(" -----> rx_buf AVANT skipcrlf : data : %s\n",data->rx_buf->data);}
 		skipcrlf(data);
-		
 		if (!data->rx_buf || !data->rx_buf->len) {
 			break;
 		}
-		//if(data->rx_buf->len!=0){printk(" -----> rx_buf APRES skipcrlf : data : %s\n",data->rx_buf->data);}
 
 		cmd = find_cmd_direct_match(data);
 		if (cmd && cmd->func) {
@@ -410,7 +339,6 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 		frag = NULL;
 		/* locate next CR/LF */
 		len = findcrlf(data, &frag, &offset);
-
 		if (!frag) {
 			/*
 			 * No CR/LF found.  Let's exit and leave any data
@@ -497,7 +425,6 @@ static void cmd_handler_process(struct modem_cmd_handler *cmd_handler,
 
 	do {
 		err = cmd_handler_process_iface_data(data, iface);
-		//printk(" --> cmd_handler_process : data->rx_buf->data : %s\n------------\n",data->rx_buf->data);
 		cmd_handler_process_rx_buf(data);
 	} while (err);
 }
