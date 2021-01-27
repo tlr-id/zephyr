@@ -656,7 +656,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	struct socket_read_data sock_data;
 
 	/* Modem command to read the data. */
-	struct modem_cmd data_cmd[] = { MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 4U, "") };
+	//struct modem_cmd data_cmd[] = { MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 4U, "") };
 
 	if (!buf || len == 0) {
 		errno = EINVAL;
@@ -671,6 +671,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	// Perso :
 	len = total_receive_value;
 	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%d", sock->sock_fd, len);
+	struct setup_cmd data_cmd[] = { SETUP_CMD(sendbuf, "", on_cmd_sock_readdata, 0U, "") };
 
 	/* Socket read settings */
 	(void) memset(&sock_data, 0, sizeof(sock_data));
@@ -682,14 +683,19 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 
 	printk(" On envoi la commande AT+QIRD=0,%d\n",len);
 
+	ret = modem_cmd_handler_setup_cmds(&mctx.iface, &mctx.cmd_handler,
+					   data_cmd, ARRAY_SIZE(data_cmd),
+					   &mdata.sem_response, MDM_CMD_TIMEOUT);
+
+
 	/* Tell the modem to give us data (AT+QIRD=sock_fd,data_len). 
 	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
 			     data_cmd, ARRAY_SIZE(data_cmd), sendbuf, &mdata.sem_response,
 			     MDM_CMD_TIMEOUT);
 				 */
 
-	/* Tell the modem to give us data (AT+QIRD=sock_fd,data_len). */
-	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+	/* Tell the modem to give us data (AT+QIRD=sock_fd,data_len). 
+	ret = modem_cmd_send_nolock(&mctx.iface, &mctx.cmd_handler,
 			     NULL, 0U, sendbuf, &mdata.sem_response,
 			     MDM_CMD_TIMEOUT);
 				 
@@ -697,7 +703,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 		errno = -ret;
 		ret = -1;
 		goto exit;
-	}
+	}*/
 
 	printk(" On a envoyé la commande AT+QIRD=0,%d\n",len);
 
@@ -715,7 +721,10 @@ exit:
 	/* clear socket data */
 	sock->data = NULL;
 
-	printk(" @@@ On sort de offload_recvfrom\n");
+	printk(" @@@ On sort de offload_recvfrom avec ret : %d et  sock_data.recv_read_len : %d \n",ret, sock_data.recv_read_len);
+	
+	
+	k_busy_wait(100000);
 	return ret;
 }
 
