@@ -34,6 +34,15 @@ static bool is_crlf(uint8_t c)
 	}
 }
 
+static bool is_cr(uint8_t c)
+{
+	if (c == '\r') {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 static void skipcrlf(struct modem_cmd_handler_data *data)
 {
 	while (data->rx_buf && data->rx_buf->len &&
@@ -45,6 +54,34 @@ static void skipcrlf(struct modem_cmd_handler_data *data)
 	}
 }
 
+
+/*
+		Algo initial :
+		frag : passé en paramètre ; portion de buffer
+		offset : passé en param ; à remplir
+		buf : buffer actuel avec la data
+		len : longueur
+		pos : position
+
+		Tant que le caractère étudié est pas un cr ou un lf
+			Si on dépasse la taille du buffer 
+				traitement
+			Sinon pos augmente et on avance
+		
+		On a trouvé un cr ou un lf -> on sort et on rentre dans le test
+			pos vaut la position précise du cr ou lf
+
+		Dans le cas où on est sorti du while, si c'est parce qu'on a trouvé un c ou un lf
+		on met dans len la position à laquelle on sort, on gère au cas où dépassement offset et buffer
+		et on sort avec len -> On renvoit a position où l'on a le cr ou lf.
+		*/
+
+		/*
+		Dans notre cas, on veut capter un deuxième groupe de crlf et renvoyer ici.
+		Pour ce faire, on peut incrémenter position de 2 (éviter de passer par le lf juste
+		derrière) et refaire une recherche. La sortie sera similaire.
+
+		*/
 static uint16_t findcrlf(struct modem_cmd_handler_data *data,
 		      struct net_buf **frag, uint16_t *offset)
 {
@@ -78,15 +115,18 @@ static uint16_t findcrlf(struct modem_cmd_handler_data *data,
 			&& buf->data[6] == ' ' && buf->data[7] == '2'
 			&& buf->data[8] == '6' && buf->data[9] == '\r')
 			{
+				/*
 				printk(" ~~~ ON EST DANS LE BON +QIRD \n ");
 				printk(" \n\n\n ------ data buf  AVANT : \n %d \n",buf->len);
 				for(iter = 0;iter<buf->len;iter++){
 					printk("%c",buf->data[iter]);
 				}
-				pos = pos+2;
+				*/
+				pos = pos+1;
 
-				//Si on a cr puis lf (ou inverse) on sort. Besoin d'avoir les deux d'affilé.
-				while (buf && buf->len && !is_crlf(*(buf->data + pos)) && !is_crlf(*(buf->data + pos+1)) ) {
+				//On a toujours un lf en milieu de packet CoAP tandis que notre fin de trame commence toujours par cr.
+				// Possibled e vérifier également que l'ona  deux symboles crlf qui se suivent pour "finir" la trame.
+				while (buf && buf->len && !is_cr(*(buf->data + pos)) ) {
 					if (pos + 1 >= buf->len) {
 						len += buf->len;
 						buf = buf->frags;
@@ -95,6 +135,7 @@ static uint16_t findcrlf(struct modem_cmd_handler_data *data,
 						pos++;
 					}
 				}
+
 			}
 	}
 
@@ -303,7 +344,7 @@ static const struct modem_cmd *find_cmd_match(
 		}
 
 		for (i = 0; i < data->cmds_len[j]; i++) {
-			printk("                data->cmds[%d][%d].cmd : %s\n",j,i,data->cmds[j][i].cmd);
+			//if(j==2){printk("                data->cmds[%d][%d].cmd : %s\n",j,i,data->cmds[j][i].cmd);}
 			/* match on "empty" cmd */
 			if (strlen(data->cmds[j][i].cmd) == 0 ||
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
@@ -420,14 +461,15 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 
 		frag = NULL;
 		/* locate next CR/LF */
-		len = findcrlf_basic(data, &frag, &offset);
-
+		len = findcrlf(data, &frag, &offset);
+/*
 		printk(" -------- >> Sortie de findcrlf ; longueur trouvée : %d\n",len);
 		int iter;
 		for(iter=0;iter<len;iter++){
 			printk("%c",data->rx_buf->data[iter]);
 		}
 		printk("\n");
+*/
 		if (!frag) {
 			/*
 			 * No CR/LF found.  Let's exit and leave any data
@@ -456,7 +498,7 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 		cmd = find_cmd_match(data);
 
 		if (cmd) {
-			printk(" Après find_cmd_match on a trouvé : %s \n",cmd->cmd);
+			//printk(" Après find_cmd_match on a trouvé : %s \n",cmd->cmd);
 			LOG_DBG("match cmd [%s] (len:%u)",
 				log_strdup(cmd->cmd), match_len);
 
