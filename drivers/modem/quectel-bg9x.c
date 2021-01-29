@@ -133,11 +133,11 @@ static int on_cmd_sockread_common(int socket_fd,
 				  uint16_t len)
 {
 	//printk(" === ON EST DANS SOCKREAD_COMMON ; data : %s\n",data->rx_buf->data);
-	//printk(" === ON EST DANS SOCKREAD_COMMON ; data : \n");
+	printk(" === ON EST DANS SOCKREAD_COMMON ; data : \n");
 	struct modem_socket	 *sock = NULL;
 	struct socket_read_data	 *sock_data;
 	int ret, i;
-	int socket_data_length = find_len(data->rx_buf->data); // Potentiel souci ici
+	int socket_data_length = find_len(data->rx_buf->data);
 	int bytes_to_skip;
 
 	if (!len) {
@@ -174,8 +174,6 @@ static int on_cmd_sockread_common(int socket_fd,
 		data->rx_buf = net_buf_frag_del(NULL, data->rx_buf);
 	}
 
-	printk(" \n \n \n &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n \n \n \n");
-	k_sleep(K_SECONDS(1000));
 	sock = modem_socket_from_fd(&mdata.socket_config, socket_fd);
 	if (!sock) {
 		LOG_ERR("Socket not found! (%d)", socket_fd);
@@ -189,9 +187,12 @@ static int on_cmd_sockread_common(int socket_fd,
 		ret = -EINVAL;
 		goto exit;
 	}
-
+	
 	ret = net_buf_linearize(sock_data->recv_buf, sock_data->recv_buf_len,
 				data->rx_buf, 0, (uint16_t)socket_data_length);
+
+	printk(" taille de retour de net_buf_linearize : %d & contenu : %s\n",ret,sock_data->recv_buf);
+
 	data->rx_buf = net_buf_skip(data->rx_buf, ret);
 	sock_data->recv_read_len = ret;
 	if (ret != socket_data_length) {
@@ -207,9 +208,7 @@ exit:
 */
 	/* don't give back semaphore -- OK to follow */
 	printk(" === ON SORT DE SOCKREAD_COMMON ; sock_data_length vaut : %d\n",socket_data_length);
-	
-	k_sleep(K_SECONDS(1000));
-
+	k_sleep(K_SECONDS(1000));	
 	return ret;
 }
 
@@ -413,11 +412,14 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 
 	k_sem_give(&mdata.sem_response); // ??
 
-	printk(" \n \n \n &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& \n \n \n \n");
-	k_sleep(K_SECONDS(1000));
+// data : modem_cmd_handler_data *
+	//printk(" data : %s \n ------- \n",data->rx_buf->data);
+
+
 	
-	return on_cmd_sockread_common(0, data, len_qird); //sock_fd = 0
+	return on_cmd_sockread_common(0, data, len); //sock_fd = 0
 }
+
 
 // Valeur ou on stocke la taille
 int total_receive_value;
@@ -438,6 +440,8 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 	sock = modem_socket_from_fd(&mdata.socket_config, 0); //sock_fd = 0;
 
 	printk("    total_receive vaut : %d have_read : %d et unread_length : %d\n",total_receive_value,have_read,unread_length);
+
+
 
 	/* Data ready indication. */
 	ret = modem_socket_packet_size_update(&mdata.socket_config, sock,
@@ -746,8 +750,6 @@ exit:
 	printk(" @@@ On sort de offload_recvfrom avec ret : %d et  sock_data.recv_read_len : %d \n",ret, sock_data.recv_read_len);
 	/* unset handler commands and ignore any errors */
 
-	
-	k_busy_wait(100000);
 	return ret;
 }
 
@@ -1039,12 +1041,6 @@ static const struct modem_cmd response_cmds[] = {
 static const struct modem_cmd unsol_cmds[] = {
 	MODEM_CMD("+QIURC: \"recv\",",	   on_cmd_unsol_recv,  1U, ""),
 	MODEM_CMD("+QIURC: \"closed\",",   on_cmd_unsol_close, 1U, ""),
-
-	// A mettre dans callback recv
-	//MODEM_CMD("+QIRD: ", 		on_cmd_unsol_qird,3U,","),
-
-	// A mettre dans envoi AT+QIRD
-	//MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 0U, ""),
 	MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ","),
 };
 
