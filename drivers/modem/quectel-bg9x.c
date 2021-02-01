@@ -202,13 +202,15 @@ static int on_cmd_sockread_common(int socket_fd,
 	}
 
 exit:
-	/* remove packet from list (ignore errors) 
+	/* remove packet from list (ignore errors) */
 	(void)modem_socket_packet_size_update(&mdata.socket_config, sock,
 					      -socket_data_length);
-*/
+
 	/* don't give back semaphore -- OK to follow */
+	//modem_socket_packet_size_update(&mdata.socket_config,sock,)
+	
 	printk(" === ON SORT DE SOCKREAD_COMMON ; sock_data_length vaut : %d\n",socket_data_length);
-	k_sleep(K_SECONDS(1000));	
+	//k_sleep(K_SECONDS(1000));	
 	return ret;
 }
 
@@ -421,17 +423,13 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 }
 
 
-// Valeur ou on stocke la taille
-int total_receive_value;
-
-
 // Perso : récupérer AT+QIRD value
 // <total_receive>[0] , <have_read>[1] , <unread_length>[2]
 MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 {
 	printk(" @@@ On est dans callback AT+QIRD=0,0\n");
 	// Rajouter de la verif ?
-	total_receive_value = ATOI(argv[0],0,"total_receive");
+	int total_receive_value = ATOI(argv[0],0,"total_receive");
 	int have_read = ATOI(argv[1],0,"have_read");
 	int unread_length = ATOI(argv[2],0,"unread_length");
 	int ret;
@@ -445,7 +443,7 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 
 	/* Data ready indication. */
 	ret = modem_socket_packet_size_update(&mdata.socket_config, sock,
-					      total_receive_value);
+					      unread_length);
 	if (ret < 0) {
 		printk("    Erreur dans modem_socket_packet_size_update : %d\n",ret);
 		LOG_ERR("socket_id:%d left_bytes:%d err: %d", 0,
@@ -467,7 +465,7 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 }
 
 static const struct modem_cmd qird_cmd_1[] = {MODEM_CMD("+QIRD: ", on_cmd_unsol_qird, 3U, ","),};
-static const struct modem_cmd qird_cmd_2[] = {MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 0U, ""),};
+static const struct modem_cmd qird_cmd_2[] = {MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 1U, ""),};
 
 /* Handler: Data receive indication. */
 MODEM_CMD_DEFINE(on_cmd_unsol_recv)
@@ -687,7 +685,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	}
 
 	// Perso :
-	len = total_receive_value;
+	//len = total_receive_value;
 	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%d", sock->sock_fd, len);
 	//struct setup_cmd data_cmd[] = { SETUP_CMD(sendbuf, "", on_cmd_sock_readdata, 0U, "") };
 
@@ -717,10 +715,11 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 			     qird_cmd_2, 1U, sendbuf, &mdata.sem_response,
 			     MDM_CMD_TIMEOUT);
 
+	//k_sleep(K_MSEC(50));
+/*
 	(void)modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
 					    NULL, 0U, false);
 
-/*
 	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
 					    &cmd,  1U, true);
 */

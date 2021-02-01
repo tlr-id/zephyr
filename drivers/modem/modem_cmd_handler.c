@@ -338,18 +338,18 @@ static const struct modem_cmd *find_cmd_match(
 	int j, i;
 
 	for (j = 0; j < ARRAY_SIZE(data->cmds); j++) {
-		printk(" data->cmds[%d] : %s\n",j,data->cmds[j]);
+		//printk(" data->cmds[%d] : %s\n",j,data->cmds[j]);
 		if (!data->cmds[j] || data->cmds_len[j] == 0U) {
 			continue;
 		}
 
 		for (i = 0; i < data->cmds_len[j]; i++) {
-			//if(j==2){printk("                data->cmds[%d][%d].cmd : %s\n",j,i,data->cmds[j][i].cmd);}
+			if(j==2){printk("                data->cmds[%d][%d].cmd : %s\n",j,i,data->cmds[j][i].cmd);}
 			/* match on "empty" cmd */
 			if (strlen(data->cmds[j][i].cmd) == 0 ||
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
 				    data->cmds[j][i].cmd_len) == 0) {
-						printk("Trouvé ! j:%d & i:%d\n",j,i);
+						//printk("Trouvé ! j:%d & i:%d\n",j,i);
 				return &data->cmds[j][i];
 			}
 		}
