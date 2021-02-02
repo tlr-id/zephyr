@@ -410,14 +410,7 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 {
 	printk(" ))) On arrive dans ON_CMD_SOCK_READDATA\n");
 
-	int len_qird = ATOI(argv[0], 0, "len_qird");
-
 	k_sem_give(&mdata.sem_response); // ??
-
-// data : modem_cmd_handler_data *
-	//printk(" data : %s \n ------- \n",data->rx_buf->data);
-
-
 	
 	return on_cmd_sockread_common(0, data, len); //sock_fd = 0
 }
@@ -688,7 +681,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	//len = total_receive_value;
 	snprintk(sendbuf, sizeof(sendbuf), "AT+QIRD=%d,%d", sock->sock_fd, len);
 	//struct setup_cmd data_cmd[] = { SETUP_CMD(sendbuf, "", on_cmd_sock_readdata, 0U, "") };
-
+printk(" Avant le memset thing\n");
 	/* Socket read settings */
 	(void) memset(&sock_data, 0, sizeof(sock_data));
 	sock_data.recv_buf     = buf;
@@ -696,7 +689,7 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	sock_data.recv_addr    = from;
 	sock->data	       = &sock_data;
 	mdata.sock_fd	       = sock->sock_fd;
-
+printk(" Après le memset thing\n");
 	printk(" On envoi la commande AT+QIRD=0,%d\n",len);
 
 	/*ret = modem_cmd_handler_setup_cmds(&mctx.iface, &mctx.cmd_handler,
@@ -714,14 +707,13 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
 			     qird_cmd_2, 1U, sendbuf, &mdata.sem_response,
 			     MDM_CMD_TIMEOUT);
-
 	//k_sleep(K_MSEC(50));
+printk(" CB : %s ; si %d vaut 1 alors la callback mise est la bonne\n",&mdata.cmd_handler_data.cmds[2][0].cmd,&mdata.cmd_handler_data.cmds[2][0].arg_count_min);
 /*
 	(void)modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
 					    NULL, 0U, false);
 
-	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data,
-					    &cmd,  1U, true);
+
 */
 
 	if (ret < 0) {

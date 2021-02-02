@@ -344,7 +344,7 @@ static const struct modem_cmd *find_cmd_match(
 		}
 
 		for (i = 0; i < data->cmds_len[j]; i++) {
-			if(j==2){printk("                data->cmds[%d][%d].cmd : %s\n",j,i,data->cmds[j][i].cmd);}
+			if(j==2){printk("                data->cmds[%d][%d].cmd : %s avec nb : %d\n",j,i,data->cmds[j][i].cmd, data->cmds[j][i].arg_count_max);}
 			/* match on "empty" cmd */
 			if (strlen(data->cmds[j][i].cmd) == 0 ||
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
@@ -631,6 +631,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 
 	ret = modem_cmd_handler_update_cmds(data, handler_cmds,
 					    handler_cmds_len, true);
+
 	if (ret < 0) {
 		printk(" ''' ERREUR ICI 3\n");
 		goto unlock_tx_lock;
@@ -651,11 +652,13 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	}
 #endif
 	if (sem) {
-		//k_sem_reset(sem);
+		k_sem_reset(sem);
 	}
 
 	iface->write(iface, buf, strlen(buf));
 	iface->write(iface, data->eol, data->eol_len);
+
+
 
 	if (sem) {
 		ret = k_sem_take(sem, timeout);
@@ -671,7 +674,7 @@ static int _modem_cmd_send(struct modem_iface *iface,
 
 	/* unset handlers and ignore any errors */
 	(void)modem_cmd_handler_update_cmds(data, NULL, 0U, false);
-
+	
 unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);

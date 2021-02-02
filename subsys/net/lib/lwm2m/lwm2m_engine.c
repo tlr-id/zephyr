@@ -177,6 +177,8 @@ char *lwm2m_sprint_ip_addr(const struct sockaddr *addr)
 				     buf, sizeof(buf));
 	}
 
+	printk(" \n \n IP : %s de sa_family : %d \n\n", addr->data,addr->sa_family);
+
 	LOG_ERR("Unknown IP address family:%d", addr->sa_family);
 	strcpy(buf, "unk");
 	return buf;
