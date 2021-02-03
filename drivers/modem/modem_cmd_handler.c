@@ -34,15 +34,6 @@ static bool is_crlf(uint8_t c)
 	}
 }
 
-static bool is_cr(uint8_t c)
-{
-	if (c == '\r') {
-		return true;
-	} else {
-		return false;
-	}
-}
-
 static void skipcrlf(struct modem_cmd_handler_data *data)
 {
 	while (data->rx_buf && data->rx_buf->len &&
@@ -83,89 +74,6 @@ static void skipcrlf(struct modem_cmd_handler_data *data)
 
 		*/
 static uint16_t findcrlf(struct modem_cmd_handler_data *data,
-		      struct net_buf **frag, uint16_t *offset)
-{
-	struct net_buf *buf = data->rx_buf;
-	uint16_t len = 0U, pos = 0U;
-
-	int iter;
-	/*
-	printk(" \n\n\n ------ data buf : \n %d \n",buf->len);
-	for(iter = 0;iter<buf->len;iter++){
-		printk("%c",buf->data[iter]);
-	}
-	printk("\n --------- \n");
-	*/
-	while (buf && buf->len && !is_crlf(*(buf->data + pos))) {
-		if (pos + 1 >= buf->len) {
-			len += buf->len;
-			buf = buf->frags;
-			pos = 0U;
-		} else {
-			pos++;
-		}
-	}
-
-
-	// Mon cas perso pour +QIRD
-	if(buf && buf->len && buf->len > 5){
-		if( buf->data[0] == '+' && buf->data[1] == 'Q' 
-			&& buf->data[2] == 'I' && buf->data[3] == 'R'
-			&& buf->data[4] == 'D' && buf->data[5] == ':' 
-			&& buf->data[6] == ' ' && buf->data[7] == '2'
-			&& buf->data[8] == '6' && buf->data[9] == '\r')
-			{
-				/*
-				printk(" ~~~ ON EST DANS LE BON +QIRD \n ");
-				printk(" \n\n\n ------ data buf  AVANT : \n %d \n",buf->len);
-				for(iter = 0;iter<buf->len;iter++){
-					printk("%c",buf->data[iter]);
-				}
-				*/
-				pos = pos+1;
-
-				//On a toujours un lf en milieu de packet CoAP tandis que notre fin de trame commence toujours par cr.
-				// Possibled e vérifier également que l'ona  deux symboles crlf qui se suivent pour "finir" la trame.
-				while (buf && buf->len && !is_cr(*(buf->data + pos)) ) {
-					if (pos + 1 >= buf->len) {
-						len += buf->len;
-						buf = buf->frags;
-						pos = 0U;
-					} else {
-						pos++;
-					}
-				}
-
-			}
-	}
-
-	if (buf && buf->len && is_crlf(*(buf->data + pos))) {
-		len += pos;
-		*offset = pos;
-		*frag = buf;
-		return len;
-	}
-/*
-	if(buf && buf->len && buf->len > 5){
-		if( buf->data[0] == '+' && buf->data[1] == 'Q' 
-			&& buf->data[2] == 'I' && buf->data[3] == 'R'
-			&& buf->data[4] == 'D' && buf->data[5] == ':' 
-			&& buf->data[6] == ' ' && buf->data[7] == '2'
-			&& buf->data[8] == '6' && buf->data[9] == '\r')
-			{
-				printk(" \n ------ data buf APRES : \n %d \n",buf->len);
-				for(iter = 0;iter<buf->len;iter++){
-					printk("%c",buf->data[iter]);
-				}
-				printk("\n --------- \n");		
-			}
-	}
-*/	
-
-	return 0;
-}
-
-static uint16_t findcrlf_basic(struct modem_cmd_handler_data *data,
 		      struct net_buf **frag, uint16_t *offset)
 {
 	struct net_buf *buf = data->rx_buf;
@@ -338,20 +246,18 @@ static const struct modem_cmd *find_cmd_match(
 	int j, i;
 
 	for (j = 0; j < ARRAY_SIZE(data->cmds); j++) {
-		//printk(" data->cmds[%d] : %s\n",j,data->cmds[j]);
 		if (!data->cmds[j] || data->cmds_len[j] == 0U) {
 			continue;
 		}
 
 		for (i = 0; i < data->cmds_len[j]; i++) {
-			if(j==2){printk("                data->cmds[%d][%d].cmd : %s avec nb : %d\n",j,i,data->cmds[j][i].cmd, data->cmds[j][i].arg_count_max);}
+			
 			/* match on "empty" cmd */
 			if (strlen(data->cmds[j][i].cmd) == 0 ||
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
 				    data->cmds[j][i].cmd_len) == 0) {
-						//printk("Trouvé ! j:%d & i:%d\n",j,i);
 				return &data->cmds[j][i];
-			}
+			}	
 		}
 	}
 
@@ -462,14 +368,6 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 		frag = NULL;
 		/* locate next CR/LF */
 		len = findcrlf(data, &frag, &offset);
-/*
-		printk(" -------- >> Sortie de findcrlf ; longueur trouvée : %d\n",len);
-		int iter;
-		for(iter=0;iter<len;iter++){
-			printk("%c",data->rx_buf->data[iter]);
-		}
-		printk("\n");
-*/
 		if (!frag) {
 			/*
 			 * No CR/LF found.  Let's exit and leave any data
@@ -498,7 +396,6 @@ static void cmd_handler_process_rx_buf(struct modem_cmd_handler_data *data)
 		cmd = find_cmd_match(data);
 
 		if (cmd) {
-			//printk(" Après find_cmd_match on a trouvé : %s \n",cmd->cmd);
 			LOG_DBG("match cmd [%s] (len:%u)",
 				log_strdup(cmd->cmd), match_len);
 
@@ -611,7 +508,6 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	int ret;
 
 	if (!iface || !handler || !handler->cmd_handler_data || !buf) {
-		printk(" ''' ERREUR ICI 1\n");
 		return -EINVAL;
 	}
 
@@ -620,7 +516,6 @@ static int _modem_cmd_send(struct modem_iface *iface,
 		sem = NULL;
 	} else if (!sem) {
 		/* cannot respect timeout without semaphore */
-		printk(" ''' ERREUR ICI 2\n");
 		return -EINVAL;
 	}
 
@@ -633,7 +528,6 @@ static int _modem_cmd_send(struct modem_iface *iface,
 					    handler_cmds_len, true);
 
 	if (ret < 0) {
-		printk(" ''' ERREUR ICI 3\n");
 		goto unlock_tx_lock;
 	}
 
@@ -658,28 +552,23 @@ static int _modem_cmd_send(struct modem_iface *iface,
 	iface->write(iface, buf, strlen(buf));
 	iface->write(iface, data->eol, data->eol_len);
 
-
-
 	if (sem) {
 		ret = k_sem_take(sem, timeout);
 
 		if (ret == 0) {
 			ret = data->last_error;
 		} else if (ret == -EAGAIN) {
-
-			printk(" ''' ERREUR ICI 4 ; on attend le sémaphore en réponse de cette commande : %s\n",buf);
 			ret = -ETIMEDOUT;
 		}
 	}
 
 	/* unset handlers and ignore any errors */
 	(void)modem_cmd_handler_update_cmds(data, NULL, 0U, false);
-	
+
 unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);
 	}
-	
 	return ret;
 }
 

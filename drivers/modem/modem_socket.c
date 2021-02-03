@@ -320,10 +320,6 @@ int modem_socket_poll(struct modem_socket_config *cfg,
 		 * Handle user check for ZSOCK_POLLOUT events:
 		 * we consider the socket to always be writable.
 		 */
-
-		//printk(" --------------- Dans modem_socket : \n");
-		//printk(" fds.event = %d \nfds.revent = %d \nsock->packet_sizes[0] = %d\n -------------------------\n",fds[i].events,fds[i].revents,sock->packet_sizes[0]);
-
 		if (fds[i].events & ZSOCK_POLLOUT) {
 			fds[i].revents |= ZSOCK_POLLOUT;
 			found_count++;
