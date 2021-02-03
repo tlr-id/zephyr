@@ -228,7 +228,7 @@ static const struct modem_cmd *find_cmd_match(
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
 				    data->cmds[j][i].cmd_len) == 0) {
 				return &data->cmds[j][i];
-			}
+			}	
 		}
 	}
 
@@ -538,7 +538,6 @@ unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);
 	}
-
 	return ret;
 }
 
