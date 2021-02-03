@@ -177,8 +177,6 @@ char *lwm2m_sprint_ip_addr(const struct sockaddr *addr)
 				     buf, sizeof(buf));
 	}
 
-	printk(" \n \n IP : %s de sa_family : %d \n\n", addr->data,addr->sa_family);
-
 	LOG_ERR("Unknown IP address family:%d", addr->sa_family);
 	strcpy(buf, "unk");
 	return buf;
@@ -4362,7 +4360,6 @@ void lwm2m_socket_del(struct lwm2m_ctx *ctx)
 static void socket_receive_loop(void)
 {
 
-	printk(" *** SOCKET_RECEIVE_LOOP \n");
 	static uint8_t in_buf[NET_IPV6_MTU];
 	static struct sockaddr from_addr;
 	socklen_t from_addr_len;
@@ -4408,12 +4405,11 @@ static void socket_receive_loop(void)
 
 			from_addr_len = sizeof(from_addr);
 			sock_fds[i].revents = 0;
-			printk(" *** APPEL A RECVFROM \n");
+			
 			len = recvfrom(sock_ctx[i]->sock_fd, in_buf,
 				       sizeof(in_buf) - 1, 0,
 				       &from_addr, &from_addr_len);
 
-			printk("Dans recvfrom : len vaut : %d\n",len);
 			if (len < 0) {
 				LOG_ERR("Error reading response: %d", errno);
 				if (sock_ctx[i]->fault_cb != NULL) {
@@ -4428,7 +4424,7 @@ static void socket_receive_loop(void)
 			}
 
 			in_buf[len] = 0U;
-			printk("On rentre dans lwm2m_udp_receive\n");
+
 			lwm2m_udp_receive(sock_ctx[i], in_buf, len, &from_addr,
 					  handle_request);
 		}
