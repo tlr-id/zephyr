@@ -10,15 +10,22 @@
 LOG_MODULE_REGISTER(modem_quectel_bg9x, CONFIG_MODEM_LOG_LEVEL);
 
 #include "quectel-bg9x.h"
+#include "sys/util_macro.h"
+
+#if IS_ENABLED(CONFIG_MQTT_LIB)
+#define APP_TYPE_MQTT 1
+#elif IS_ENABLED(CONFIG_LWM2M)
+#define APP_TYPE_LWM2M 1
+#endif
 
 static struct k_thread	       modem_rx_thread;
 static struct k_work_q	       modem_workq;
 static struct modem_data       mdata;
 static struct modem_context    mctx;
 static const struct socket_op_vtable offload_socket_fd_op_vtable;
-
+#ifdef APP_TYPE_LWM2M
 struct k_sem qird_resp_sem;
-
+#endif
 static K_KERNEL_STACK_DEFINE(modem_rx_stack, CONFIG_MODEM_QUECTEL_BG9X_RX_STACK_SIZE);
 static K_KERNEL_STACK_DEFINE(modem_workq_stack, CONFIG_MODEM_QUECTEL_BG9X_RX_WORKQ_STACK_SIZE);
 NET_BUF_POOL_DEFINE(mdm_recv_pool, MDM_RECV_MAX_BUF, MDM_RECV_BUF_SIZE, 0, NULL);
@@ -195,8 +202,9 @@ static int on_cmd_sockread_common(int socket_fd,
 
 
 	sock_data->recv_read_len = ret;
-
+	#ifdef APP_TYPE_LWM2M
 	k_sem_give(&qird_resp_sem);
+	#endif
 
 	if (ret != socket_data_length) {
 		LOG_ERR("Total copied data is different then received data!"
@@ -408,6 +416,7 @@ MODEM_CMD_DEFINE(on_cmd_sock_readdata)
 	return on_cmd_sockread_common(mdata.sock_fd, data, len);
 }
 
+#ifdef APP_TYPE_LWM2M
 /* Callback for the AT+QIRD:<>,<> that retrieves the received data. */
 static const struct modem_cmd readdata_qird_cmd = MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 1U, "");
 
@@ -439,6 +448,7 @@ MODEM_CMD_DEFINE(on_cmd_unsol_qird)
 
 /* Callback for the AT+QIRD:<>,<> which gives useful length values for received data */
 static const struct modem_cmd unsol_qird_cmd = MODEM_CMD("+QIRD: ", on_cmd_unsol_qird, 3U, ",");
+#endif
 
 /* Handler: +QIURC: "recv",<connectID>[0] ; Data receive indication. */
 MODEM_CMD_DEFINE(on_cmd_unsol_recv)
@@ -454,6 +464,7 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 		return 0;
 	}
 
+#ifdef APP_TYPE_LWM2M
 	/* AT+QIRD=<connectID>,0 is sent in order to query the retrieved data's length. */
 	char send_cmd[sizeof("AT+QIRD=##,#")]={0};
 	snprintk(send_cmd,sizeof(send_cmd),"AT+QIRD=%d,%d",sock_fd,0);
@@ -463,7 +474,12 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 	ret = modem_cmd_send_nolock(&mctx.iface, &mctx.cmd_handler,
 			     NULL, 0U, send_cmd, NULL, K_NO_WAIT);
 	ret = modem_cmd_handler_update_cmds(&mdata.cmd_handler_data, &unsol_qird_cmd,  1U, true);
-
+#endif
+#ifdef APP_TYPE_MQTT
+	/* Data ready indication. */
+	LOG_INF("Data Receive Indication for socket: %d", sock_fd);
+	modem_socket_data_ready(&mdata.socket_config, sock);
+#endif
 	return 0;
 }
 
@@ -635,6 +651,11 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	int    ret;
 	struct socket_read_data sock_data;
 
+#ifdef APP_TYPE_MQTT
+	/* Modem command to read the data. */
+	struct modem_cmd data_cmd[] = { MODEM_CMD("+QIRD: ", on_cmd_sock_readdata, 0U, "") };
+#endif
+
 	if (!buf || len == 0) {
 		errno = EINVAL;
 		return -1;
@@ -655,13 +676,20 @@ static ssize_t offload_recvfrom(void *obj, void *buf, size_t len,
 	sock->data	       = &sock_data;
 	mdata.sock_fd	       = sock->sock_fd;
 
+#ifdef APP_TYPE_MQTT
+	/* Tell the modem to give us data (AT+QIRD=sock_fd,data_len). */
+	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
+			     data_cmd, ARRAY_SIZE(data_cmd), sendbuf, &mdata.sem_response,
+			     MDM_CMD_TIMEOUT);
+#endif
+#ifdef APP_TYPE_LWM2M
 	k_sem_reset(&qird_resp_sem);
-
+	
 	/* Tell the modem to give us data (AT+QIRD=sock_fd,data_len). */
 	ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
 			     &readdata_qird_cmd, 1U, sendbuf, &qird_resp_sem,
 			     MDM_CMD_TIMEOUT);
-
+#endif
 	if (ret < 0) {
 		errno = -ret;
 		ret = -1;
@@ -766,10 +794,21 @@ static int offload_connect(void *obj, const struct sockaddr *addr,
 {
 	struct modem_socket *sock     = (struct modem_socket *) obj;
 	uint16_t	    dst_port  = 0;
-	char		    *protocol = "UDP";
+	char		    *protocol;
 	struct modem_cmd    cmd[]     = { MODEM_CMD("+QIOPEN: ", on_cmd_atcmdinfo_sockopen, 2U, ",") };
 	char		    buf[sizeof("AT+QIOPEN=#,##,###,####.####.####.####,######")] = {0};
 	int		    ret;
+
+	/* Check whether we use the TCP or the UDP protocol. */
+	if(sock->ip_proto == IPPROTO_TCP){
+		protocol = "TCP";	
+	}else if(sock->ip_proto == IPPROTO_UDP){
+		protocol = "UDP";
+	}else{
+		LOG_ERR("Protocol used isn't TCP or UDP : %d",sock->ip_proto);
+		errno = EINVAL;
+		return -1; 
+	}
 
 	if (sock->id < mdata.socket_config.base_socket_num - 1) {
 		LOG_ERR("Invalid socket_id(%d) from fd:%d",
@@ -1004,7 +1043,9 @@ static int modem_setup(void)
 	int ret = 0, counter;
 	int rssi_retry_count = 0, init_retry_count = 0, pdp_act_retry_count = 0;
 
+	#ifdef APP_TYPE_LWM2M
 	k_sem_init(&qird_resp_sem,0,1);
+	#endif
 
 	/* Setup the pins to ensure that Modem is enabled. */
 	pin_init();
