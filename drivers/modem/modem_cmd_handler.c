@@ -538,6 +538,7 @@ unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);
 	}
+	
 	return ret;
 }
 
