@@ -4538,10 +4538,6 @@ void lwm2m_socket_del(struct lwm2m_ctx *ctx)
 
 static void socket_receive_loop(void)
 {
-<<<<<<< HEAD
-=======
-
->>>>>>> ac8f3bf1a8... LwM2M working ; MQTT to be tested with those modifications ; cleaned.
 	static uint8_t in_buf[NET_IPV6_MTU];
 	static struct sockaddr from_addr;
 	socklen_t from_addr_len;
