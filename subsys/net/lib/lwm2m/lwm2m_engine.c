@@ -4215,14 +4215,6 @@ int lwm2m_engine_add_service(k_work_handler_t service, uint32_t period_ms)
 	return 0;
 }
 
-int lwm2m_engine_update_service(uint32_t i, uint32_t period_ms)
-{
-
-	service_node_data[i].min_call_period = period_ms;
-
-	return 0;
-}
-
 static int lwm2m_engine_service(void)
 {
 	struct observe_node *obs;
