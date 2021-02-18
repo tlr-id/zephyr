@@ -222,7 +222,7 @@ static const struct modem_cmd *find_cmd_match(
 			continue;
 		}
 
-		for (i = 0; i < data->cmds_len[j]; i++) {			
+		for (i = 0; i < data->cmds_len[j]; i++) {
 			/* match on "empty" cmd */
 			if (strlen(data->cmds[j][i].cmd) == 0 ||
 			    strncmp(data->match_buf, data->cmds[j][i].cmd,
@@ -538,7 +538,7 @@ unlock_tx_lock:
 	if (!no_tx_lock) {
 		k_sem_give(&data->sem_tx_lock);
 	}
-	
+
 	return ret;
 }
 
