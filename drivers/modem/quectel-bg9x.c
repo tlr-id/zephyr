@@ -1042,7 +1042,7 @@ static int modem_pdp_context_activate(void)
 static int modem_setup(void)
 {
 	int ret = 0, counter;
-	int rssi_retry_count = 0, init_retry_count = 0, pdp_act_retry_count = 0;
+	int rssi_retry_count = 0, init_retry_count = 0;
 
 	k_sem_init(&qird_resp_sem,0,1);
 
