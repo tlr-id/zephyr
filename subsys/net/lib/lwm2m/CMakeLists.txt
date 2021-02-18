@@ -5,7 +5,7 @@ zephyr_library()
 zephyr_include_directories(.)
 
 zephyr_library_sources(
-    #lwm2m_engine.c
+    lwm2m_engine.c
     lwm2m_obj_security.c
     lwm2m_obj_server.c
     lwm2m_obj_device.c
