@@ -50,6 +50,7 @@ static void client_disconnect(struct mqtt_client *client, int result,
 			      bool notify)
 {
 	int err_code;
+
 	err_code = mqtt_transport_disconnect(client);
 	if (err_code < 0) {
 		MQTT_ERR("Failed to disconnect transport!");
