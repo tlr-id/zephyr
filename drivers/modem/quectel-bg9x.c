@@ -978,7 +978,7 @@ static const struct modem_cmd unsol_cmds[] = {
 
 /* Commands sent to the modem to set it up at boot time. */
 static const struct setup_cmd setup_cmds[] = {
-	SETUP_CMD_NOHANDLE("ATE1"),
+	SETUP_CMD_NOHANDLE("ATE0"),
 	SETUP_CMD_NOHANDLE("ATH"),
 	SETUP_CMD_NOHANDLE("AT+CMEE=1"),
 
