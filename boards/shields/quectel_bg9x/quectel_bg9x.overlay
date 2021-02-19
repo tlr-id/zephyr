@@ -17,7 +17,21 @@
 	};
 };
 
-&usart1{
+&usart1 {
 	current-speed = <115200>;
 };
 
+stmod_usart: &usart1 {};            // The STMOD are using UART_1
+
+/ {
+	leds {
+		external_led: led_3 {
+				gpios = <&arduino_header 14 0>; /* D8 */
+				label = "User External";
+		};
+	};
+
+	aliases {
+		ledext = &external_led;
+	};
+};
