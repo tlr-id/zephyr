@@ -245,7 +245,7 @@ config LOG_STRDUP_MAX_STRING
 
 config LOG_STRDUP_BUF_COUNT
 	int "Number of buffers in the pool used by log_strdup()"
-	default 100
+	default 4
 	help
 	  Number of calls to log_strdup() which can be pending before flushed
 	  to output. If "<log_strdup alloc failed>" message is seen in the log

@@ -33,7 +33,6 @@ source "dts/Kconfig"
 source "drivers/Kconfig"
 source "lib/Kconfig"
 source "subsys/Kconfig"
-source "$(ZEPHYR_BASE)/../my_lwm2m/lwm2m/Kconfig.lwm2m"
 
 osource "$(TOOLCHAIN_KCONFIG_DIR)/Kconfig"
 

@@ -290,7 +290,6 @@ config LWM2M_LOCATION_OBJ_SUPPORT
 menu "IPSO Alliance Smart Object Support"
 
 source "subsys/net/lib/lwm2m/Kconfig.ipso"
-#source "workspace/ltem-lwm2m/my_lwm2m/lwm2m/Kconfig.lwm2m"
 
 endmenu
 
