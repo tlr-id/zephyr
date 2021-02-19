@@ -1072,28 +1072,8 @@ restart_rssi:
 			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
 			     MDM_CMD_TIMEOUT);
 
-	/* If there is trouble opening the PDP context, we try to deactivate/reactive it 3 times. */
-	while (ret == -EIO && pdp_act_retry_count < MDM_PDP_ACT_RETRY_COUNT) {
-
-		modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
-			     NULL, 0U, "AT+QIDEACT=1", &mdata.sem_response,
-			     MDM_CMD_TIMEOUT);
-
-		/* If there's an error for the AT+QIDEACT, restart the module. */
-		if (ret < 0) {
-			goto restart;
-		}
-
-		ret = modem_cmd_send(&mctx.iface, &mctx.cmd_handler,
-			     NULL, 0U, "AT+QIACT=1", &mdata.sem_response,
-			     MDM_CMD_TIMEOUT);
-		pdp_act_retry_count++;
-	}
-
-	/* Retry or Possibly Exit if there's 3 consecutive failures. */
-	if ((ret < 0 && init_retry_count++ < MDM_INIT_RETRY_COUNT) ||
-		(pdp_act_retry_count >= MDM_PDP_ACT_RETRY_COUNT)) {
-		pdp_act_retry_count = 0;
+	/* Retry or Possibly Exit. */
+	if (ret < 0 && init_retry_count++ < MDM_INIT_RETRY_COUNT) {
 		goto restart;
 	}
 
