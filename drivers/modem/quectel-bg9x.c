@@ -190,9 +190,7 @@ static int on_cmd_sockread_common(int socket_fd,
 
 	ret = net_buf_linearize(sock_data->recv_buf, sock_data->recv_buf_len,
 				data->rx_buf, 0, (uint16_t)socket_data_length);
-
 	data->rx_buf = net_buf_skip(data->rx_buf, ret);
-
 
 	sock_data->recv_read_len = ret;
 
@@ -458,7 +456,6 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 	char send_cmd[sizeof("AT+QIRD=##,#")]={0};
 	snprintk(send_cmd,sizeof(send_cmd),"AT+QIRD=%d,%d",sock_fd,0);
 
-
 	/* Because this is a callback, there is no premption possible to give a semaphore. Therefore, we need to use send_nolock and to update the handler commands to what we need. */
 	ret = modem_cmd_send_nolock(&mctx.iface, &mctx.cmd_handler,
 			     NULL, 0U, send_cmd, NULL, K_NO_WAIT);
@@ -466,10 +463,6 @@ MODEM_CMD_DEFINE(on_cmd_unsol_recv)
 
 	return 0;
 }
-
-
-
-
 
 /* Handler: Socket Close Indication. */
 MODEM_CMD_DEFINE(on_cmd_unsol_close)
